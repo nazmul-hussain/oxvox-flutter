@@ -30,7 +30,14 @@ class OxvoxApp extends StatelessWidget {
           theme: buildTheme(palette, Brightness.light),
           darkTheme: buildTheme(palette, Brightness.dark),
           themeMode: themeId == 'night' ? ThemeMode.dark : ThemeMode.light,
-          home: state.loading ? SplashScreen(state: state) : HomeShell(state: state),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.12)),
+            child: child!,
+          ),
+          home: state.loading
+              ? SplashScreen(state: state)
+              : HomeShell(state: state),
         );
       },
     );

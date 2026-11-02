@@ -41,6 +41,12 @@ dependencies:
   timezone: ^0.11.2
   flutter_timezone: ^5.1.1
   url_launcher: ^6.3.3
+  google_fonts: ^9.0.0
+  just_audio: ^0.10.6
+  flutter_svg: ^2.3.2
+  flutter_tts: ^4.2.3
+  share_plus: ^13.3.1
+  file_picker: ^13.3.2
 
 dev_dependencies:
   flutter_test:
@@ -63,6 +69,15 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/data/plan_default.json
+    - assets/data/arabic.json
+    - assets/data/example_bn.json
+    - assets/data/listening_lessons.json
+    - assets/data/listening_questions.json
+    - assets/data/topics.json
+    - assets/data/plan_index.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

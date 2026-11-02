@@ -7,35 +7,47 @@ class SrsCard {
   final String due; // YYYY-MM-DD
   final String? lastReviewed;
 
-  const SrsCard({this.ease = 2.5, this.interval = 0, this.reps = 0, required this.due, this.lastReviewed});
+  const SrsCard({
+    this.ease = 2.5,
+    this.interval = 0,
+    this.reps = 0,
+    required this.due,
+    this.lastReviewed,
+  });
 
   factory SrsCard.fromJson(Map<String, dynamic> j) => SrsCard(
-        ease: (j['ease'] as num).toDouble(),
-        interval: j['interval'] as int,
-        reps: j['reps'] as int,
-        due: j['due'] as String,
-        lastReviewed: j['lastReviewed'] as String?,
-      );
+    ease: (j['ease'] as num).toDouble(),
+    interval: j['interval'] as int,
+    reps: j['reps'] as int,
+    due: j['due'] as String,
+    lastReviewed: j['lastReviewed'] as String?,
+  );
 
   Map<String, dynamic> toJson() => {
-        'ease': ease,
-        'interval': interval,
-        'reps': reps,
-        'due': due,
-        'lastReviewed': lastReviewed,
-      };
+    'ease': ease,
+    'interval': interval,
+    'reps': reps,
+    'due': due,
+    'lastReviewed': lastReviewed,
+  };
 }
 
 enum Rating { again, hard, good, easy }
 
-const _quality = {Rating.again: 1, Rating.hard: 3, Rating.good: 4, Rating.easy: 5};
+const _quality = {
+  Rating.again: 1,
+  Rating.hard: 3,
+  Rating.good: 4,
+  Rating.easy: 5,
+};
 
 String fmtDate(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
 String todayStr() => fmtDate(DateTime.now());
 
-bool isDue(SrsCard? card) => card == null || card.due.compareTo(todayStr()) <= 0;
+bool isDue(SrsCard? card) =>
+    card == null || card.due.compareTo(todayStr()) <= 0;
 
 SrsCard reviewCard(SrsCard? card, Rating rating) {
   final q = _quality[rating]!;

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme.dart';
 import '../data/app_state.dart';
-import 'progress_screen.dart';
-import 'review_screen.dart';
+import 'auth_screen.dart';
+import 'listen_screen.dart';
 import 'settings_screen.dart';
 import 'today_screen.dart';
+import 'topics_screen.dart';
+import 'welcome_screen.dart';
 import 'words_screen.dart';
 
+/// Web: fixed header (brand + avatar) and a 4-item bottom nav: Today, Words, Topics, Listen.
 class HomeShell extends StatefulWidget {
   final AppState state;
   const HomeShell({super.key, required this.state});
@@ -16,30 +20,291 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  int _index = 0;
+  String _view = 'today';
+  // Set when the study plan is saved from the level test, so the welcome modal closes.
+  bool _welcomeHidden = false;
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      TodayScreen(state: widget.state),
-      WordsScreen(state: widget.state),
-      ReviewScreen(state: widget.state),
-      ProgressScreen(state: widget.state),
-      SettingsScreen(state: widget.state),
-    ];
+    final s = widget.state;
+    final p = paletteFor(resolveThemeId(s.themeSetting));
+    final navActive = _view == 'settings' ? '' : _view;
+
+    Widget page = switch (_view) {
+      'words' => WordsScreen(state: s, p: p),
+      'topics' => TopicsScreen(state: s, p: p),
+      'listen' => ListenScreen(state: s, p: p),
+      'settings' => SettingsScreen(
+        state: s,
+        p: p,
+        onClose: () => setState(() => _view = 'words'),
+      ),
+      _ => TodayScreen(state: s, p: p, go: (v) => setState(() => _view = v)),
+    };
+
     return Scaffold(
-      body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.today_outlined), selectedIcon: Icon(Icons.today), label: 'Today'),
-          NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book), label: 'Words'),
-          NavigationDestination(icon: Icon(Icons.style_outlined), selectedIcon: Icon(Icons.style), label: 'Review'),
-          NavigationDestination(icon: Icon(Icons.emoji_events_outlined), selectedIcon: Icon(Icons.emoji_events), label: 'Progress'),
-          NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
+      backgroundColor: p.bg,
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                _Header(
+                  p: p,
+                  onLogin: () => openAuth(context, s, p),
+                  onBrand: () => setState(() => _view = 'today'),
+                  onAvatar: () => setState(() => _view = 'settings'),
+                  active: _view == 'settings',
+                  name: s.accountName,
+                ),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 680),
+                      child: SingleChildScrollView(
+                        // Keyed per screen so every navigation starts at the top.
+                        key: ValueKey(_view),
+                        padding: EdgeInsets.fromLTRB(
+                          0,
+                          _view == 'today' ? 0 : 8,
+                          0,
+                          76,
+                        ),
+                        // Today's hero is full-width (web: negative margin); other pages get the 16px side padding.
+                        child: _view == 'today'
+                            ? page
+                            : Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: page,
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Web Welcome: first-visit setup, shown until onboarded.
+          if (!s.onboarded && !_welcomeHidden)
+            WelcomeScreen(
+              state: s,
+              p: p,
+              onOpenPlan: () {
+                // After the level test: close the welcome and open the study plan in Settings.
+                setState(() {
+                  _welcomeHidden = true;
+                  _view = 'settings';
+                });
+                s.setOnboarded();
+              },
+            ),
+        ],
+      ),
+      bottomNavigationBar: _BottomNav(
+        p: p,
+        active: navActive,
+        onTap: (v) => setState(() => _view = v),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  final OxPalette p;
+  final VoidCallback onBrand;
+  final VoidCallback onAvatar;
+  final VoidCallback onLogin;
+  final bool active;
+  final String? name;
+  const _Header({
+    required this.p,
+    required this.onBrand,
+    required this.onAvatar,
+    required this.onLogin,
+    required this.active,
+    this.name,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = (name?.trim().isNotEmpty == true)
+        ? name!.trim()[0].toUpperCase()
+        : '?';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: p.headerBg,
+        boxShadow: [
+          BoxShadow(color: p.shadow, offset: const Offset(0, 1), blurRadius: 3),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          InkWell(
+            onTap: onBrand,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: p.brand,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Ox',
+                    style: TextStyle(
+                      color: p.onBrand,
+                      fontSize: 27,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Text(
+                  'Vox',
+                  style: TextStyle(
+                    color: p.brand,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          name == null
+              ? _LoginChip(p: p, onPressed: onLogin)
+              : InkWell(
+                  onTap: onAvatar,
+                  customBorder: const CircleBorder(),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: p.brand,
+                      border: Border.all(
+                        color: active ? p.ink : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                    child: Text(
+                      initial,
+                      style: TextStyle(
+                        color: p.onBrand,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
         ],
       ),
     );
   }
+}
+
+class _BottomNav extends StatelessWidget {
+  final OxPalette p;
+  final String active;
+  final ValueChanged<String> onTap;
+  const _BottomNav({
+    required this.p,
+    required this.active,
+    required this.onTap,
+  });
+
+  static const _items = [
+    ('today', 'Today', Icons.calendar_today_outlined, Icons.calendar_today),
+    ('words', 'Words', Icons.menu_book_outlined, Icons.menu_book),
+    ('topics', 'Topics', Icons.auto_awesome_outlined, Icons.auto_awesome),
+    ('listen', 'Listen', Icons.headphones_outlined, Icons.headphones),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54 + MediaQuery.paddingOf(context).bottom,
+      padding: EdgeInsets.fromLTRB(
+        6,
+        4,
+        6,
+        4 + MediaQuery.paddingOf(context).bottom,
+      ),
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border(top: BorderSide(color: p.line)),
+        boxShadow: [
+          BoxShadow(
+            color: p.shadow,
+            offset: const Offset(0, -6),
+            blurRadius: 18,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          for (final (id, label, icon, activeIcon) in _items)
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => onTap(id),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: active == id ? p.accentSoft : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        active == id ? activeIcon : icon,
+                        size: 19,
+                        color: active == id ? p.accent : p.muted,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 10.2,
+                          fontWeight: active == id
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          color: active == id ? p.accent : p.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoginChip extends StatelessWidget {
+  final OxPalette p;
+  final VoidCallback onPressed;
+  const _LoginChip({required this.p, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton(
+    onPressed: onPressed,
+    style: OutlinedButton.styleFrom(
+      foregroundColor: p.accent,
+      side: BorderSide(color: p.accent),
+      shape: const StadiumBorder(),
+    ),
+    child: const Text('Log in', style: TextStyle(fontWeight: FontWeight.w600)),
+  );
 }

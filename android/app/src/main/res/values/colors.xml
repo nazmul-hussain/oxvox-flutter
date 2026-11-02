@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Afternoon theme background (web default), shown before Flutter draws -->
+    <color name="launch_background">#FBF6EC</color>
+</resources>

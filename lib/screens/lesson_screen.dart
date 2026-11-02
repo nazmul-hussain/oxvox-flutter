@@ -1,38 +1,611 @@
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
 
+import '../core/config.dart';
+import '../core/listening.dart';
+import '../core/theme.dart';
 import '../data/app_state.dart';
+import '../widgets/listen_thumb.dart';
 import '../models/word.dart';
 
-class LessonScreen extends StatelessWidget {
+/// Web components/ListeningPractice.js LessonView.
+class LessonScreen extends StatefulWidget {
   final AppState state;
-  final ListeningLesson lesson;
-  const LessonScreen({super.key, required this.state, required this.lesson});
+  final OxPalette p;
+  final String lessonId;
+  const LessonScreen({
+    super.key,
+    required this.state,
+    required this.p,
+    required this.lessonId,
+  });
+
+  @override
+  State<LessonScreen> createState() => _LessonScreenState();
+}
+
+enum _Mode { listen, quiz, done }
+
+class _LessonScreenState extends State<LessonScreen> {
+  late final ListeningLesson? lesson = getLesson(
+    widget.state.lessons,
+    widget.lessonId,
+  );
+  late final List<QuizQuestion> quiz = lesson == null
+      ? const []
+      : buildQuiz(widget.state.questions, widget.lessonId);
+
+  _Mode mode = _Mode.listen;
+  int qi = 0;
+  final List<bool> answers = [];
+  int? picked;
+  bool showScript = false;
+
+  OxPalette get p => widget.p;
+
+  void _next() {
+    answers.add(quiz[qi].options[picked!].correct);
+    if (qi + 1 < quiz.length) {
+      setState(() {
+        qi += 1;
+        picked = null;
+      });
+    } else {
+      widget.state.saveListening(widget.lessonId, List<bool>.from(answers));
+      setState(() => mode = _Mode.done);
+    }
+  }
+
+  void _restart() {
+    setState(() {
+      mode = _Mode.quiz;
+      qi = 0;
+      answers.clear();
+      picked = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Lesson ${lesson.number}: ${lesson.title}')),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: lesson.lines.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 8),
-        itemBuilder: (_, i) => Text('${i + 1}. ${lesson.lines[i]}', style: const TextStyle(fontSize: 17)),
+    final l = lesson;
+    final back = TextButton.icon(
+      onPressed: () => Navigator.of(context).pop(),
+      icon: Icon(Icons.chevron_left, size: 16, color: p.accent),
+      label: Text(
+        'Listening',
+        style: TextStyle(color: p.accent, fontWeight: FontWeight.w700),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: FilledButton(
-            onPressed: () async {
-              await state.completeLesson();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lesson complete (+10 XP)')));
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('Mark as complete'),
+    );
+
+    return Scaffold(
+      backgroundColor: p.bg,
+      appBar: null,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: l == null
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    back,
+                    Text(
+                      'This lesson is not available.',
+                      style: TextStyle(color: p.muted),
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        back,
+                        Text(
+                          'Lesson ${l.number} of ${widget.state.lessons.length}',
+                          style: TextStyle(fontSize: 13.6, color: p.muted),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ListenThumbView(title: l.title, num: l.number, big: true),
+                    const SizedBox(height: 10),
+                    Text(
+                      l.title,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: p.ink,
+                      ),
+                    ),
+                    Text(
+                      '${l.lines.length} lines',
+                      style: TextStyle(fontSize: 13.6, color: p.muted),
+                    ),
+                    const SizedBox(height: 12),
+                    _Player(
+                      url:
+                          '${AppConfig.contentBase}${l.audio.replaceFirst(RegExp(r'^/'), '')}',
+                      title: 'Listen first, then answer',
+                      duration: l.duration,
+                      p: p,
+                    ),
+                    const SizedBox(height: 12),
+                    if (mode == _Mode.listen)
+                      _FullButton(
+                        p: p,
+                        label: 'Answer questions',
+                        onTap: () => setState(() => mode = _Mode.quiz),
+                      ),
+                    if (mode == _Mode.quiz && qi < quiz.length)
+                      _QuizCard(
+                        p: p,
+                        q: quiz[qi],
+                        index: qi,
+                        total: quiz.length,
+                        picked: picked,
+                        onPick: (i) => setState(() => picked = i),
+                        onNext: _next,
+                      ),
+                    if (mode == _Mode.done)
+                      _Card(
+                        p: p,
+                        child: Column(
+                          children: [
+                            Text(
+                              'Result',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: p.ink,
+                              ),
+                            ),
+                            Text(
+                              '${answers.where((e) => e).length} / ${quiz.length}',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                color: p.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _GhostButton(
+                                  p: p,
+                                  label: 'Try again',
+                                  icon: Icons.replay,
+                                  onTap: _restart,
+                                ),
+                                _FullButton(
+                                  p: p,
+                                  label: 'Back to lessons',
+                                  wide: false,
+                                  onTap: () => Navigator.of(context).pop(),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    _Card(
+                      p: p,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _GhostButton(
+                            p: p,
+                            label: showScript ? 'Hide script' : 'Show script',
+                            onTap: () =>
+                                setState(() => showScript = !showScript),
+                          ),
+                          if (showScript)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  for (final line in l.lines)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Text(
+                                        '•  $line',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          height: 1.4,
+                                          color: p.ink,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  final OxPalette p;
+  final Widget child;
+  const _Card({required this.p, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: p.surface,
+      border: Border.all(color: p.line),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: child,
+  );
+}
+
+class _QuizCard extends StatelessWidget {
+  final OxPalette p;
+  final QuizQuestion q;
+  final int index;
+  final int total;
+  final int? picked;
+  final ValueChanged<int> onPick;
+  final VoidCallback onNext;
+  const _QuizCard({
+    required this.p,
+    required this.q,
+    required this.index,
+    required this.total,
+    required this.picked,
+    required this.onPick,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      p: p,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Question ${index + 1} of $total',
+            style: TextStyle(fontSize: 13.6, color: p.muted),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            q.prompt,
+            style: TextStyle(
+              fontSize: 16.8,
+              fontWeight: FontWeight.w700,
+              color: p.ink,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < q.options.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _OptionTile(
+                p: p,
+                label: q.options[i].label,
+                state: picked == null
+                    ? _OptState.idle
+                    : q.options[i].correct
+                    ? _OptState.good
+                    : i == picked
+                    ? _OptState.bad
+                    : _OptState.idle,
+                enabled: picked == null,
+                onTap: () => onPick(i),
+              ),
+            ),
+          if (picked != null) ...[
+            const SizedBox(height: 4),
+            _FullButton(
+              p: p,
+              label: index + 1 < total ? 'Next question' : 'See result',
+              onTap: onNext,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+enum _OptState { idle, good, bad }
+
+class _OptionTile extends StatelessWidget {
+  final OxPalette p;
+  final String label;
+  final _OptState state;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _OptionTile({
+    required this.p,
+    required this.label,
+    required this.state,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = switch (state) {
+      _OptState.good => p.greenSoft,
+      _OptState.bad => p.redSoft,
+      _OptState.idle => p.surface2,
+    };
+    final border = switch (state) {
+      _OptState.good => p.green,
+      _OptState.bad => p.red,
+      _OptState.idle => p.line,
+    };
+    final fg = switch (state) {
+      _OptState.good => p.green,
+      _OptState.bad => p.red,
+      _OptState.idle => p.ink,
+    };
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border.all(color: border),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 15.2,
+            color: fg,
+            fontWeight: state == _OptState.good
+                ? FontWeight.w700
+                : FontWeight.w400,
           ),
         ),
       ),
     );
+  }
+}
+
+class _FullButton extends StatelessWidget {
+  final OxPalette p;
+  final String label;
+  final VoidCallback onTap;
+  final bool wide;
+  const _FullButton({
+    required this.p,
+    required this.label,
+    required this.onTap,
+    this.wide = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final btn = FilledButton(
+      onPressed: onTap,
+      style: FilledButton.styleFrom(
+        backgroundColor: p.brand,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.2),
+      ),
+      child: Text(label),
+    );
+    return wide ? SizedBox(width: double.infinity, child: btn) : btn;
+  }
+}
+
+class _GhostButton extends StatelessWidget {
+  final OxPalette p;
+  final String label;
+  final IconData? icon;
+  final VoidCallback onTap;
+  const _GhostButton({
+    required this.p,
+    required this.label,
+    required this.onTap,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon ?? Icons.article_outlined, size: 14, color: p.accent),
+    label: Text(label),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: p.accent,
+      side: BorderSide(color: p.accent),
+      backgroundColor: p.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      textStyle: const TextStyle(fontSize: 13.6, fontWeight: FontWeight.w700),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+  );
+}
+
+const _speeds = [0.75, 1.0, 1.25];
+
+String _speedLabel(double v) =>
+    v == v.roundToDouble() ? v.round().toString() : v.toString();
+
+class _Player extends StatefulWidget {
+  final String url;
+  final String title;
+  final double duration;
+  final OxPalette p;
+  const _Player({
+    required this.url,
+    required this.title,
+    required this.duration,
+    required this.p,
+  });
+
+  @override
+  State<_Player> createState() => _PlayerState();
+}
+
+class _PlayerState extends State<_Player> {
+  final AudioPlayer _audio = AudioPlayer();
+  int _speedIndex = 1;
+  bool _loaded = false;
+
+  @override
+  void dispose() {
+    _audio.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    if (_audio.playing) {
+      await _audio.pause();
+      return;
+    }
+    if (!_loaded) {
+      await _audio.setUrl(widget.url);
+      _loaded = true;
+    }
+    await _audio.play();
+  }
+
+  Future<void> _cycleSpeed() async {
+    _speedIndex = (_speedIndex + 1) % _speeds.length;
+    await _audio.setSpeed(_speeds[_speedIndex]);
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.p;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border.all(color: p.line),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: StreamBuilder<PlayerState>(
+        stream: _audio.playerStateStream,
+        builder: (context, snap) {
+          final playing = snap.data?.playing ?? false;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.title,
+                style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+              ),
+              const SizedBox(height: 10),
+              StreamBuilder<Duration>(
+                stream: _audio.positionStream,
+                builder: (context, pos) => StreamBuilder<Duration?>(
+                  stream: _audio.durationStream,
+                  builder: (context, dur) {
+                    final total = (dur.data?.inMilliseconds ?? 0) > 0
+                        ? dur.data!.inMilliseconds / 1000
+                        : widget.duration;
+                    final now = (pos.data?.inMilliseconds ?? 0) / 1000;
+                    return Row(
+                      children: [
+                        InkWell(
+                          onTap: _toggle,
+                          customBorder: const CircleBorder(),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: p.brand,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              playing ? Icons.pause : Icons.play_arrow,
+                              color: p.onBrand,
+                              size: 26,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  activeTrackColor: p.accent,
+                                  thumbColor: p.accent,
+                                  inactiveTrackColor: p.line,
+                                ),
+                                child: Slider(
+                                  min: 0,
+                                  max: total > 0 ? total : 1,
+                                  value: now
+                                      .clamp(0, total > 0 ? total : 1)
+                                      .toDouble(),
+                                  onChanged: (v) => _audio.seek(
+                                    Duration(milliseconds: (v * 1000).round()),
+                                  ),
+                                ),
+                              ),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _fmt(now),
+                                    style: TextStyle(
+                                      fontSize: 13.6,
+                                      color: p.muted,
+                                    ),
+                                  ),
+                                  Text(
+                                    _fmt(total),
+                                    style: TextStyle(
+                                      fontSize: 13.6,
+                                      color: p.muted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        _GhostButton(
+                          p: p,
+                          // Web shows 0.75x, 1x, 1.25x (not 1.0x).
+                          label: '${_speedLabel(_speeds[_speedIndex])}x',
+                          icon: Icons.speed,
+                          onTap: _cycleSpeed,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  String _fmt(double s) {
+    if (!s.isFinite || s <= 0) return '0:00';
+    final m = s ~/ 60;
+    final r = s.floor() % 60;
+    return '$m:${r.toString().padLeft(2, '0')}';
   }
 }
