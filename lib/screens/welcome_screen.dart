@@ -105,23 +105,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (!s.isSignedIn)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 8,
-                          ),
-                          minimumSize: const Size(0, 32),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () => openAuth(context, widget.state, p),
-                        child: Text(
-                          'Already have an account? Log in',
-                          style: TextStyle(color: p.accent, fontSize: 13.6),
-                        ),
+                    OutlinedButton(
+                      onPressed: () => openAuth(context, widget.state, p),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: p.accent,
+                        side: BorderSide(color: p.accent),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                       ),
+                      child: const Text('Already have an account? Log in'),
                     ),
                   if (!s.isSignedIn) const SizedBox(height: 10),
                   Flexible(
@@ -193,35 +184,43 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  OutlinedButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => PlacementScreen(
-                          state: widget.state,
-                          p: p,
-                          onOpenPlan: widget.onOpenPlan,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => PlacementScreen(
+                                state: widget.state,
+                                p: p,
+                                onOpenPlan: widget.onOpenPlan,
+                              ),
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: p.accent,
+                            side: BorderSide(color: p.accent),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          child: const Text('Level test'),
                         ),
                       ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: p.accent,
-                      side: BorderSide(color: p.accent),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    child: const Text('Take a level test'),
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton(
-                    onPressed: _start,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: p.brand,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      textStyle: const TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 15.2,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _start,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: p.brand,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 15.2,
+                            ),
+                          ),
+                          child: const Text('Start learning'),
+                        ),
                       ),
-                    ),
-                    child: const Text('Start learning'),
+                    ],
                   ),
                 ],
               ),
@@ -254,38 +253,49 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget _levelChip(String id, String name, int count) {
     final p = widget.p;
     final on = _levels.contains(id);
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () => _toggleLevel(id),
-      child: Ink(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: on ? p.accentSoft : p.surface,
-          border: Border.all(
-            color: on ? p.accent : p.line,
-            width: on ? 1.5 : 1,
-          ),
-          borderRadius: BorderRadius.circular(999),
+    // Same look as the Settings > Study plan level cards: bordered, highlighted when selected.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 120),
+      child: Material(
+        color: on ? p.accentSoft : p.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: on ? p.accent : p.line, width: on ? 2 : 1),
         ),
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: id,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: on ? p.accent : p.muted,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _toggleLevel(id),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      id,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: on ? p.accent : p.ink,
+                      ),
+                    ),
+                    if (on) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.check_circle, size: 16, color: p.accent),
+                    ],
+                  ],
                 ),
-              ),
-              TextSpan(
-                text: '  $name',
-                style: TextStyle(color: p.ink, fontSize: 12.8),
-              ),
-              TextSpan(
-                text: '\n${_fmt(count)} words',
-                style: TextStyle(color: p.muted, fontSize: 11),
-              ),
-            ],
+                Text(
+                  name,
+                  style: TextStyle(color: p.ink, fontSize: 12.8),
+                ),
+                Text(
+                  '${_fmt(count)} words',
+                  style: TextStyle(color: p.muted, fontSize: 12.8),
+                ),
+              ],
+            ),
           ),
         ),
       ),
