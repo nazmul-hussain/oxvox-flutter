@@ -162,7 +162,7 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
                       style: TextStyle(
                         color: p.accent,
                         fontSize: 19.2,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     if (i < parts.length - 1)
@@ -248,7 +248,7 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
           style: TextStyle(
             color: p.ink,
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ),
@@ -282,7 +282,7 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
           '${widget.title} finished',
           style: TextStyle(
             fontSize: 22.4,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w500,
             color: p.ink,
           ),
         ),
@@ -299,7 +299,7 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
             children: [
               Text(
                 'Score: $_score of $_total ($pct%)',
-                style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+                style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
               ),
               const SizedBox(height: 4),
               Text(band, style: TextStyle(color: p.muted, fontSize: 13.6)),
@@ -334,7 +334,7 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
           Text(
             'Review',
             style: TextStyle(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w500,
               fontSize: 16,
               color: p.ink,
             ),

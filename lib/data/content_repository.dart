@@ -81,6 +81,41 @@ class ContentRepository {
     );
   }
 
+  /// Word meanings for one language (lowercase headword -> meaning), from the CDN.
+  /// Uses the local cache when present, otherwise downloads the file listed under
+  /// `meanings` in the manifest. Returns an empty map when offline or not published.
+  Future<Map<String, String>> loadTranslations(String code) async {
+    try {
+      final dir = await _dir();
+      final cache = File('${dir.path}/meanings_$code.json');
+      final String raw;
+      if (await cache.exists()) {
+        raw = await cache.readAsString();
+      } else {
+        final manifest =
+            jsonDecode(await _get(AppConfig.manifestPath)) as Map<String, dynamic>;
+        final path = (manifest['meanings'] as Map<String, dynamic>?)?[code];
+        if (path == null) return const {};
+        raw = await _get(path as String);
+        await cache.writeAsString(raw);
+      }
+      return (jsonDecode(raw) as Map<String, dynamic>).map(
+        (k, v) => MapEntry(k.toLowerCase(), v as String),
+      );
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Removes cached meaning files so they are downloaded again after a content update.
+  Future<void> _clearTranslationCache(Directory dir) async {
+    await for (final f in dir.list()) {
+      if (f is File && f.uri.pathSegments.last.startsWith('meanings_')) {
+        await f.delete();
+      }
+    }
+  }
+
   /// Downloads newer content. Returns true if a new version was saved. Never throws.
   Future<bool> refreshFromCdn() async {
     try {
@@ -107,6 +142,7 @@ class ContentRepository {
       await File('${dir.path}/example_bn.json').writeAsString(bn);
       await File('${dir.path}/lessons.json').writeAsString(lessons);
       await File('${dir.path}/version.txt').writeAsString('$remote');
+      await _clearTranslationCache(dir);
       return true;
     } catch (_) {
       return false;

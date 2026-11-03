@@ -150,7 +150,7 @@ class _AccountPanelState extends State<AccountPanel> {
         children: [
           Text(
             'Account',
-            style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+            style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
           ),
           const SizedBox(height: 4),
           Text(
@@ -195,7 +195,7 @@ class _AccountPanelState extends State<AccountPanel> {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 19.2,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -207,7 +207,7 @@ class _AccountPanelState extends State<AccountPanel> {
                     Text(
                       name,
                       style: TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: p.ink,
                       ),
                     ),
@@ -270,7 +270,7 @@ class _AccountPanelState extends State<AccountPanel> {
         children: [
           Text(
             'Profile',
-            style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+            style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
           ),
           const SizedBox(height: 8),
           _field(_name, 'Name', maxLength: 60),
@@ -288,7 +288,7 @@ class _AccountPanelState extends State<AccountPanel> {
           const SizedBox(height: 16),
           Text(
             'Change password',
-            style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+            style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
           ),
           const SizedBox(height: 8),
           _field(_currentPw, 'Current password', obscure: true),
@@ -374,7 +374,7 @@ class _AccountPanelState extends State<AccountPanel> {
       foregroundColor: WidgetStatePropertyAll(filled ? Colors.white : fg),
       side: WidgetStatePropertyAll(BorderSide(color: fg)),
       textStyle: const WidgetStatePropertyAll(
-        TextStyle(fontWeight: FontWeight.w700, fontSize: 14.4),
+        TextStyle(fontWeight: FontWeight.w500, fontSize: 14.4),
       ),
     );
     return OutlinedButton(

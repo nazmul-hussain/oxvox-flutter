@@ -35,6 +35,7 @@ class PlacementQuestion {
 List<PlacementQuestion> buildPlacement(
   Map<String, List<Word>> pools,
   List<String> used,
+  String Function(Word) meaningOf,
 ) {
   final usedSet = used.toSet();
   final base = placementSize ~/ cefrLevels.length;
@@ -54,7 +55,10 @@ List<PlacementQuestion> buildPlacement(
           .take(3);
       final options = _shuffled([w, ...distractors])
           .map(
-            (o) => PlacementOption(o.id, dir == 'bn-en' ? o.word : o.meaning),
+            (o) => PlacementOption(
+              o.id,
+              dir == 'bn-en' ? o.word : meaningOf(o),
+            ),
           )
           .toList();
       questions.add(
@@ -62,7 +66,7 @@ List<PlacementQuestion> buildPlacement(
           wid: w.id,
           level: c,
           dir: dir,
-          prompt: dir == 'bn-en' ? w.meaning : w.word,
+          prompt: dir == 'bn-en' ? meaningOf(w) : w.word,
           options: options,
         ),
       );

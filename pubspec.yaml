@@ -71,6 +71,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/images/splash.png
     - assets/data/plan_default.json
     - assets/data/arabic.json
     - assets/data/example_bn.json

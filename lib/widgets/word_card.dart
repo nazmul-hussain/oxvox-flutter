@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
+import '../core/languages.dart';
 import '../models/word.dart';
+import '../services/pronunciation.dart';
 
 /// Short part-of-speech tags, same map as the web WordCard.
 const _posShort = {
@@ -43,7 +45,7 @@ TextSpan highlight(String sentence, String word, TextStyle base, Color hl) {
     spans.add(
       TextSpan(
         text: m.group(0),
-        style: TextStyle(color: hl, fontWeight: FontWeight.w700),
+        style: TextStyle(color: hl, fontWeight: FontWeight.w500),
       ),
     );
     last = m.end;
@@ -54,21 +56,44 @@ TextSpan highlight(String sentence, String word, TextStyle base, Color hl) {
   return TextSpan(style: base, children: spans);
 }
 
-/// Word title line: word, POS tags and Arabic (web: .word-text, .pos-tag, .arabic-inline).
-class _WordTitle extends StatelessWidget {
+/// Word title line: word, POS tags and the secondary meaning (web: .word-text, .pos-tag, .arabic-inline).
+class _WordTitle extends StatefulWidget {
   final Word w;
   final OxPalette p;
-  final String? arabic;
+  final WordMeanings lines;
   final double size;
   const _WordTitle({
     required this.w,
     required this.p,
-    required this.arabic,
+    required this.lines,
     required this.size,
   });
 
   @override
+  State<_WordTitle> createState() => _WordTitleState();
+}
+
+class _WordTitleState extends State<_WordTitle> {
+  bool _speaking = false;
+
+  Future<void> _toggleSpeak() async {
+    if (_speaking) {
+      await Pronunciation.stop();
+      if (mounted) setState(() => _speaking = false);
+      return;
+    }
+    setState(() => _speaking = true);
+    await Pronunciation.speak(widget.w.word, onEnd: () {
+      if (mounted) setState(() => _speaking = false);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final w = widget.w;
+    final p = widget.p;
+    final lines = widget.lines;
+    final size = widget.size;
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
@@ -76,8 +101,31 @@ class _WordTitle extends StatelessWidget {
           w.word,
           style: TextStyle(
             color: p.accent,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w500,
             fontSize: size,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 6),
+          child: Tooltip(
+            message: _speaking ? 'Stop' : 'Listen to pronunciation',
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _toggleSpeak,
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: p.accentSoft,
+                ),
+                child: Icon(
+                  _speaking ? Icons.stop : Icons.volume_up,
+                  size: 17,
+                  color: p.accent,
+                ),
+              ),
+            ),
           ),
         ),
         for (final tag in posTags(w))
@@ -94,21 +142,21 @@ class _WordTitle extends StatelessWidget {
                 style: TextStyle(
                   color: p.muted,
                   fontSize: 11.2,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
           ),
-        if (arabic != null)
+        if (lines.secondary != null)
           Padding(
             padding: const EdgeInsets.only(left: 8),
             child: Text(
-              arabic!,
-              textDirection: TextDirection.rtl,
+              lines.secondary!,
+              textDirection: lines.secondaryRtl ? TextDirection.rtl : null,
               style: TextStyle(
                 color: p.accent,
                 fontSize: 22.2,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -122,7 +170,7 @@ class WordCard extends StatelessWidget {
   final Word w;
   final VoidCallback onTap;
   final OxPalette p;
-  final String? arabic;
+  final WordMeanings lines;
   final bool showSynonyms;
 
   /// Small line under the word, e.g. "Missed 2×" or "Day 4" (web WordCard meta).
@@ -133,7 +181,7 @@ class WordCard extends StatelessWidget {
     required this.w,
     required this.onTap,
     required this.p,
-    this.arabic,
+    required this.lines,
     this.showSynonyms = true,
     this.meta,
   });
@@ -161,9 +209,9 @@ class WordCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _WordTitle(w: w, p: p, arabic: arabic, size: 19.8),
+                    _WordTitle(w: w, p: p, lines: lines, size: 19.8),
                     Text(
-                      w.meaning,
+                      lines.primary,
                       style: TextStyle(color: p.muted, fontSize: 17.6),
                     ),
                     if (showSynonyms)
@@ -171,7 +219,7 @@ class WordCard extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 2.4),
                         child: Text(
                           syn,
-                          style: TextStyle(color: p.faint, fontSize: 11.5),
+                          style: TextStyle(color: p.muted, fontSize: 12.5),
                         ),
                       ),
                     if (meta != null)
@@ -182,7 +230,7 @@ class WordCard extends StatelessWidget {
                           style: TextStyle(
                             color: p.accent,
                             fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
@@ -211,7 +259,7 @@ Future<void> showWordSheet(
   BuildContext context,
   Word w,
   OxPalette p, {
-  required String? arabic,
+  required WordMeanings lines,
   required Map<String, String> exampleBn,
   required bool saved,
   required VoidCallback onToggleSave,
@@ -255,9 +303,9 @@ Future<void> showWordSheet(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _WordTitle(w: w, p: p, arabic: arabic, size: 19.8),
+                            _WordTitle(w: w, p: p, lines: lines, size: 19.8),
                             Text(
-                              w.meaning,
+                              lines.primary,
                               style: TextStyle(color: p.muted, fontSize: 17.6),
                             ),
                           ],
@@ -291,7 +339,7 @@ Future<void> showWordSheet(
                       'Examples',
                       style: TextStyle(
                         fontSize: 13.6,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: p.ink,
                       ),
                     ),
@@ -357,7 +405,7 @@ Future<void> showWordSheet(
                         ),
                         textStyle: const TextStyle(
                           fontSize: 13.6,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       child: Text(isSaved ? '★ Saved' : '☆ Save'),
@@ -382,7 +430,7 @@ class _Info extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ink = TextStyle(color: p.ink, fontSize: 14.4, height: 1.45);
-    final bold = ink.copyWith(fontWeight: FontWeight.w700);
+    final bold = ink.copyWith(fontWeight: FontWeight.w500);
     final lines = <Widget>[
       if (w.scenario != null && w.scenario!.isNotEmpty)
         Text.rich(

@@ -44,15 +44,15 @@ class _TopicsScreenState extends State<TopicsScreen> {
         Text(
           'Topics',
           style: TextStyle(
-            fontSize: 22.4,
-            fontWeight: FontWeight.w700,
+            fontSize: OxType.heading,
+            fontWeight: FontWeight.w500,
             color: p.ink,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           'Sound like a native speaker. Pick a topic, study the cards, then take a quiz on the same words.',
-          style: TextStyle(fontSize: 13.6, color: p.muted),
+          style: TextStyle(fontSize: OxType.small, color: p.muted),
         ),
         const SizedBox(height: 12),
         for (final t in s.topics)
@@ -81,22 +81,22 @@ class _TopicsScreenState extends State<TopicsScreen> {
             icon: Icon(Icons.arrow_back, size: 16, color: p.accent),
             label: Text(
               'All topics',
-              style: TextStyle(color: p.accent, fontWeight: FontWeight.w700),
+              style: TextStyle(color: p.accent, fontWeight: FontWeight.w500),
             ),
           ),
         ),
         Text(
           topic.label,
           style: TextStyle(
-            fontSize: 22.4,
-            fontWeight: FontWeight.w700,
+            fontSize: OxType.heading,
+            fontWeight: FontWeight.w500,
             color: p.ink,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           topic.description,
-          style: TextStyle(fontSize: 13.6, color: p.muted),
+          style: TextStyle(fontSize: OxType.small, color: p.muted),
         ),
         const SizedBox(height: 12),
         if (topic.narration != null) ...[
@@ -179,13 +179,13 @@ class _TopicsScreenState extends State<TopicsScreen> {
             child: WordCard(
               w: w,
               p: p,
-              arabic: s.content?.arabic[w.id],
+              lines: s.lineOf(w),
               showSynonyms: s.showSynonyms,
               onTap: () => showWordSheet(
                 context,
                 w,
                 p,
-                arabic: s.content?.arabic[w.id],
+                lines: s.lineOf(w),
                 exampleBn: s.content?.exampleBn ?? const {},
                 saved: s.bookmarks.containsKey(w.id),
                 onToggleSave: () => s.toggleBookmark(w.id),
@@ -210,6 +210,19 @@ class _TopicsScreenState extends State<TopicsScreen> {
   }
 }
 
+/// Icon per topic id (data/topics.json). Unknown ids use the default.
+const _topicIcons = <String, IconData>{
+  'phrasal': Icons.alt_route,
+  'idioms': Icons.lightbulb_outline,
+  'discourse': Icons.forum_outlined,
+  'collocations': Icons.join_inner,
+  'linking': Icons.link,
+  'hedging': Icons.blur_on,
+  'modals': Icons.rule,
+};
+
+IconData _topicIcon(String id) => _topicIcons[id] ?? Icons.auto_awesome;
+
 class _TopicCard extends StatelessWidget {
   final OxPalette p;
   final TopicItem topic;
@@ -226,55 +239,79 @@ class _TopicCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = topic.words.length;
     final pct = total == 0 ? 0.0 : done / total;
-    return Material(
-      color: p.surface,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: p.line),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                topic.label,
-                style: TextStyle(
-                  fontSize: 16.8,
-                  fontWeight: FontWeight.w700,
-                  color: p.ink,
+    return Container(
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border.all(color: p.line),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: p.shadow, offset: const Offset(0, 2), blurRadius: 8),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: p.accentSoft,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(_topicIcon(topic.id), color: p.accent, size: 24),
                 ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                '$total items · $done practised',
-                style: TextStyle(
-                  fontSize: 12.8,
-                  fontWeight: FontWeight.w600,
-                  color: p.accent,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        topic.label,
+                        style: TextStyle(
+                          fontSize: 16.4,
+                          fontWeight: FontWeight.w500,
+                          color: p.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$total items · $done practised',
+                        style: TextStyle(
+                          fontSize: 12.8,
+                          fontWeight: FontWeight.w400,
+                          color: p.accent,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        topic.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: p.muted),
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: pct,
+                          minHeight: 5,
+                          backgroundColor: p.surface2,
+                          valueColor: AlwaysStoppedAnimation(p.accent),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                topic.description,
-                style: TextStyle(fontSize: 13.6, color: p.muted),
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: pct,
-                  minHeight: 6,
-                  backgroundColor: p.surface2,
-                  valueColor: AlwaysStoppedAnimation(p.accent),
-                ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Icon(Icons.chevron_right, color: p.muted),
+              ],
+            ),
           ),
         ),
       ),
@@ -353,7 +390,7 @@ class _GrammarSheetState extends State<_GrammarSheet> {
                     child: Text(
                       narration.title,
                       style: TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         fontSize: 16,
                         color: p.ink,
                       ),
@@ -389,7 +426,7 @@ class _GrammarSheetState extends State<_GrammarSheet> {
                 const SizedBox(height: 10),
                 Text(
                   sec.heading,
-                  style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+                  style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
                 ),
                 for (final t in sec.text)
                   Padding(
@@ -398,7 +435,7 @@ class _GrammarSheetState extends State<_GrammarSheet> {
                       t,
                       style: TextStyle(
                         color: p.ink,
-                        fontSize: 13.6,
+                        fontSize: OxType.small,
                         height: 1.45,
                       ),
                     ),

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../core/quiz.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
-import '../models/word.dart';
 import '../widgets/web_ui.dart';
 import '../widgets/word_card.dart';
 import 'flashcards_screen.dart';
@@ -22,10 +20,6 @@ class WordsScreen extends StatefulWidget {
 
 class _WordsScreenState extends State<WordsScreen> {
   String _query = '';
-  bool _quizOpen = false;
-  // null = default (30% of the day's words); set once the user moves the slider.
-  int? _quizCount;
-  int? _quizCountDay;
   final _dayCtrl = TextEditingController();
 
   @override
@@ -47,14 +41,10 @@ class _WordsScreenState extends State<WordsScreen> {
         : words
               .where(
                 (w) =>
-                    w.word.toLowerCase().contains(q) || w.meaning.contains(q),
+                    w.word.toLowerCase().contains(q) ||
+                    s.meaningOf(w).toLowerCase().contains(q),
               )
               .toList();
-
-    if (_quizCountDay != day) {
-      _quizCountDay = day;
-      _quizCount = null;
-    }
 
     return AnimatedBuilder(
       animation: s,
@@ -73,7 +63,7 @@ class _WordsScreenState extends State<WordsScreen> {
               Text(
                 'Day',
                 style: TextStyle(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                   color: p.ink,
                   fontSize: 16,
                 ),
@@ -87,7 +77,7 @@ class _WordsScreenState extends State<WordsScreen> {
                   keyboardType: TextInputType.number,
                   style: TextStyle(
                     color: p.ink,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                     fontSize: 16,
                   ),
                   decoration: InputDecoration(
@@ -114,7 +104,7 @@ class _WordsScreenState extends State<WordsScreen> {
               ),
               Text(
                 ' / ${s.totalDays}',
-                style: TextStyle(color: p.muted, fontSize: 13.6),
+                style: TextStyle(color: p.muted, fontSize: OxType.small),
               ),
               const Spacer(),
               _IconOnly(
@@ -149,8 +139,13 @@ class _WordsScreenState extends State<WordsScreen> {
                   p: p,
                   icon: Icons.psychology,
                   label: 'Quiz',
-                  on: _quizOpen,
-                  onTap: () => setState(() => _quizOpen = !_quizOpen),
+                  onTap: () => showDayQuizCountSheet(
+                    context,
+                    state: s,
+                    p: p,
+                    day: day,
+                    pool: words,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 _ActionBtn(
@@ -163,7 +158,6 @@ class _WordsScreenState extends State<WordsScreen> {
               ],
             ),
           if (words.isNotEmpty) const SizedBox(height: 8),
-          if (_quizOpen && words.isNotEmpty) _dayQuizPanel(s, p, day, words),
           TextField(
             onChanged: (v) => setState(() => _query = v),
             style: const TextStyle(fontSize: 16),
@@ -193,7 +187,7 @@ class _WordsScreenState extends State<WordsScreen> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
                 '${visible.length} of ${words.length} words',
-                style: TextStyle(color: p.muted, fontSize: 13.6),
+                style: TextStyle(color: p.muted, fontSize: OxType.small),
               ),
             ),
           for (final w in visible)
@@ -206,70 +200,15 @@ class _WordsScreenState extends State<WordsScreen> {
                   context,
                   w,
                   p,
-                  arabic: s.content?.arabic[w.id],
+                  lines: s.lineOf(w),
                   exampleBn: s.content?.exampleBn ?? const {},
                   saved: s.bookmarks.containsKey(w.id),
                   onToggleSave: () => s.toggleBookmark(w.id),
                 ),
-                arabic: s.content?.arabic[w.id],
+                lines: s.lineOf(w),
                 showSynonyms: s.showSynonyms,
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  /// Web: the "Day N quiz" card (count picker + Start quiz).
-  Widget _dayQuizPanel(AppState s, OxPalette p, int day, List<Word> words) {
-    final n = words.length;
-    final min = quizMinCount(n);
-    final value = (_quizCount ?? defaultQuizCount(n)).clamp(min, n).toInt();
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: p.surface,
-        border: Border.all(color: p.line),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Day $day quiz',
-            style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
-          ),
-          const SizedBox(height: 6),
-          CountPicker(
-            p: p,
-            value: value,
-            min: min,
-            max: n,
-            onChanged: (v) => setState(() => _quizCount = v),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => QuizScreen(
-                  state: s,
-                  p: p,
-                  title: 'Day $day quiz',
-                  day: day,
-                  pool: words,
-                  count: value,
-                  distractPool: words,
-                ),
-              ),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: p.accent,
-              foregroundColor: p.accentInk,
-              minimumSize: const Size.fromHeight(44),
-            ),
-            child: const Text('Start quiz'),
-          ),
         ],
       ),
     );
@@ -342,7 +281,7 @@ class _ActionBtn extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 color: on ? p.accent : p.ink,
               ),
             ),

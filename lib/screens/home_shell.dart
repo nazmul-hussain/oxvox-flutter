@@ -135,7 +135,7 @@ class _Header extends StatelessWidget {
         ? name!.trim()[0].toUpperCase()
         : '?';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: p.headerBg,
         boxShadow: [
@@ -162,8 +162,8 @@ class _Header extends StatelessWidget {
                     'Ox',
                     style: TextStyle(
                       color: p.onBrand,
-                      fontSize: 27,
-                      fontWeight: FontWeight.w700,
+                      fontSize: OxType.appName,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -172,8 +172,8 @@ class _Header extends StatelessWidget {
                   'Vox',
                   style: TextStyle(
                     color: p.brand,
-                    fontSize: 27,
-                    fontWeight: FontWeight.w700,
+                    fontSize: OxType.appName,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -185,8 +185,8 @@ class _Header extends StatelessWidget {
                   onTap: onAvatar,
                   customBorder: const CircleBorder(),
                   child: Container(
-                    width: 38,
-                    height: 38,
+                    width: 32,
+                    height: 32,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
@@ -200,7 +200,7 @@ class _Header extends StatelessWidget {
                       initial,
                       style: TextStyle(
                         color: p.onBrand,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         fontSize: 16,
                       ),
                     ),
@@ -276,8 +276,8 @@ class _BottomNav extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10.2,
                           fontWeight: active == id
-                              ? FontWeight.w700
-                              : FontWeight.w600,
+                              ? FontWeight.w500
+                              : FontWeight.w400,
                           color: active == id ? p.accent : p.muted,
                         ),
                       ),
@@ -305,6 +305,6 @@ class _LoginChip extends StatelessWidget {
       side: BorderSide(color: p.accent),
       shape: const StadiumBorder(),
     ),
-    child: const Text('Log in', style: TextStyle(fontWeight: FontWeight.w600)),
+    child: const Text('Log in', style: TextStyle(fontWeight: FontWeight.w400)),
   );
 }

@@ -71,7 +71,7 @@ class _ListenScreenState extends State<ListenScreen> {
                           'Listening',
                           style: TextStyle(
                             fontSize: 22.4,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w500,
                             color: p.ink,
                           ),
                         ),
@@ -109,14 +109,14 @@ class _ListenScreenState extends State<ListenScreen> {
                           TextSpan(
                             text: 'Level ',
                             style: TextStyle(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                               color: p.ink,
                             ),
                           ),
                           TextSpan(
                             text: levelText,
                             style: TextStyle(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               color: p.brand,
                             ),
                           ),
@@ -223,7 +223,7 @@ class _DayBarState extends State<_DayBar> {
             children: [
               Text(
                 'Day',
-                style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+                style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
               ),
               const SizedBox(width: 6),
               SizedBox(
@@ -234,7 +234,7 @@ class _DayBarState extends State<_DayBar> {
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                     fontSize: 16,
                     color: p.ink,
                   ),
@@ -332,7 +332,7 @@ class _LessonRow extends StatelessWidget {
                       lesson.title,
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: p.ink,
                       ),
                     ),
@@ -340,7 +340,7 @@ class _LessonRow extends StatelessWidget {
                       'Lesson ${lesson.number} · ${_fmtDur(lesson.duration)} · ${lesson.lines.length} lines',
                       style: TextStyle(
                         fontSize: 12.8,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: p.brand,
                       ),
                     ),
@@ -352,7 +352,7 @@ class _LessonRow extends StatelessWidget {
                   '$score/$total',
                   style: TextStyle(
                     fontSize: 12.8,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                     color: p.green,
                   ),
                 ),
@@ -383,7 +383,7 @@ class _LevelCard extends StatelessWidget {
         children: [
           Text(
             'Your listening level',
-            style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+            style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
           ),
           const SizedBox(height: 6),
           if (est != null) ...[
@@ -394,7 +394,7 @@ class _LevelCard extends StatelessWidget {
                     text: est!.level,
                     style: TextStyle(
                       fontSize: 24,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                       color: p.ink,
                     ),
                   ),
@@ -419,7 +419,7 @@ class _LevelCard extends StatelessWidget {
                     Text(
                       '${est!.byType[t]![0]} / ${est!.byType[t]![1]}',
                       style: TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: p.ink,
                       ),
                     ),

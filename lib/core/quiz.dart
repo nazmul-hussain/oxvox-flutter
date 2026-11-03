@@ -76,9 +76,13 @@ List<String> _gapDistractors(Word w, String sentence, List<Word> distractPool) {
 }
 
 /// Meaning question with mixed direction (web meaningQuestion).
-QuizQuestion _meaningQuestion(Word w, List<Word> distractPool) {
+QuizQuestion _meaningQuestion(
+  Word w,
+  List<Word> distractPool,
+  String Function(Word) meaningOf,
+) {
   final bn2en = _rng.nextBool();
-  String key(Word x) => bn2en ? x.word : x.meaning;
+  String key(Word x) => bn2en ? x.word : meaningOf(x);
   final answer = key(w);
   final distractors = _shuffled(
     distractPool.where((x) => x.id != w.id && key(x) != answer).toList(),
@@ -86,7 +90,7 @@ QuizQuestion _meaningQuestion(Word w, List<Word> distractPool) {
   return QuizQuestion(
     word: w,
     dir: bn2en ? 'bn2en' : 'en2bn',
-    prompt: bn2en ? w.meaning : w.word,
+    prompt: bn2en ? meaningOf(w) : w.word,
     answer: answer,
     options: _shuffled([answer, ...distractors]),
   );
@@ -98,6 +102,7 @@ List<QuizQuestion> buildQuizQuestions(
   List<Word> pool,
   int count,
   List<Word> distractPool,
+  String Function(Word) meaningOf,
 ) {
   final ordered = _shuffled(pool);
   final gapTarget = (count * gapShare).round();
@@ -124,7 +129,7 @@ List<QuizQuestion> buildQuizQuestions(
   for (final w in ordered) {
     if (gaps.length + meanings.length >= count) break;
     if (used.contains(w.id)) continue;
-    meanings.add(_meaningQuestion(w, distractPool));
+    meanings.add(_meaningQuestion(w, distractPool, meaningOf));
   }
   return _shuffled([...gaps, ...meanings]);
 }

@@ -66,8 +66,8 @@ class WebTitleBand extends StatelessWidget {
       title,
       style: TextStyle(
         color: p.heroInk,
-        fontSize: 20.8,
-        fontWeight: FontWeight.w700,
+        fontSize: OxType.title,
+        fontWeight: FontWeight.w500,
       ),
     ),
   );
@@ -104,7 +104,7 @@ class WebButton extends StatelessWidget {
         ghost ? BorderSide(color: p.accent) : BorderSide.none,
       ),
       textStyle: const WidgetStatePropertyAll(
-        TextStyle(fontWeight: FontWeight.w700, fontSize: 15.2),
+        TextStyle(fontWeight: FontWeight.w500, fontSize: OxType.body),
       ),
     );
     final child = icon == null

@@ -1,3 +1,4 @@
+import '../core/languages.dart';
 import '../core/listening.dart';
 
 import 'dart:convert';
@@ -8,10 +9,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/plan.dart';
 import '../core/srs.dart';
+import '../core/theme.dart';
 import '../services/api_client.dart';
 import '../models/topic.dart';
 import '../models/word.dart';
 import 'content_repository.dart';
+import '../services/reminder_service.dart';
 
 /// Single source of truth for user data on the device. Keys mirror the Atlas collections.
 class AppState extends ChangeNotifier {
@@ -23,15 +26,17 @@ class AppState extends ChangeNotifier {
   List<Word> get words => content?.allWords ?? const [];
 
   // users / settings
-  String themeSetting = 'auto';
+  String themeSetting = 'afternoon';
+  // User font size multiplier on top of kBaseTextScale (0.85 to 1.3, 1.0 = Medium).
+  double fontScale = kDefaultFontScale;
   int dailyGoal = 10;
   String? displayName;
   int currentDay = 1;
 
   // reminders
   bool reminderEnabled = false;
-  int reminderHour = 20;
-  int reminderMinute = 0;
+  // Daily reminder times as "HH:mm", sorted, unique.
+  List<String> reminderTimes = ['20:00'];
 
   // progress: wordId -> SrsCard
   final Map<String, SrsCard> progress = {};
@@ -564,6 +569,82 @@ class AppState extends ChangeNotifier {
       _days.isNotEmpty ? _days.length : (content?.totalDays ?? 0);
   bool showSynonyms = true; // web default settings.showSynonyms
 
+  // ---- meaning languages ----
+  // Main meaning language (chosen from the device language on first start) and
+  // the optional second line (default Arabic; 'none' hides it).
+  String primaryLang = fallbackPrimaryLang;
+  String secondaryLang = defaultSecondaryLang;
+  // Loaded translation maps (lowercase headword -> meaning), keyed by language code.
+  // Bangla uses word.meaning and Arabic uses content.arabic, so they are not stored here.
+  final Map<String, Map<String, String>> _translations = {};
+
+  MeaningLang get primaryMeaningLang => langByCode(primaryLang)!;
+  MeaningLang? get secondaryMeaningLang => langByCode(secondaryLang);
+
+  Map<String, String>? _mapFor(String code) {
+    if (code == 'bn') return null;
+    if (code == 'ar') return content?.arabic ?? const {};
+    return _translations[code] ?? const {};
+  }
+
+  Future<void> _loadLangMaps() async {
+    for (final code in {primaryLang, secondaryLang}) {
+      if (code == 'bn' || code == 'ar' || _translations.containsKey(code)) {
+        continue;
+      }
+      if (langByCode(code) == null) continue;
+      _translations[code] = await repo.loadTranslations(code);
+    }
+  }
+
+  /// Main meaning of a word in the chosen language. Falls back to the bundled
+  /// Bangla meaning when a translation is missing, so every card always has text.
+  String meaningOf(Word w) {
+    if (primaryLang == 'bn') return w.meaning;
+    final t = _mapFor(primaryLang)?[w.id];
+    return (t == null || t.isEmpty) ? w.meaning : t;
+  }
+
+  /// Second line for a word, or null when it is off or missing.
+  String? secondaryOf(Word w) {
+    if (secondaryLang == secondaryNone || secondaryLang == primaryLang) {
+      return null;
+    }
+    if (secondaryLang == 'bn') return w.meaning;
+    final t = _mapFor(secondaryLang)?[w.id];
+    return (t == null || t.isEmpty) ? null : t;
+  }
+
+  /// Second line for a headword id (used by quiz options, which hold word text).
+  String? secondaryForId(String id) {
+    final w = _wordIndex[id];
+    return w == null ? null : secondaryOf(w);
+  }
+
+  /// Both meaning lines for a word, ready to pass to word cards.
+  WordMeanings lineOf(Word w) => WordMeanings(
+    primary: meaningOf(w),
+    primaryRtl: primaryMeaningLang.rtl,
+    secondary: secondaryOf(w),
+    secondaryRtl: secondaryMeaningLang?.rtl ?? false,
+  );
+
+  Future<void> setPrimaryLang(String code) async {
+    if (langByCode(code) == null) return;
+    primaryLang = code;
+    await _prefs.setString('primaryLang', code);
+    await _loadLangMaps();
+    notifyListeners();
+  }
+
+  Future<void> setSecondaryLang(String code) async {
+    if (code != secondaryNone && langByCode(code) == null) return;
+    secondaryLang = code;
+    await _prefs.setString('secondaryLang', code);
+    await _loadLangMaps();
+    notifyListeners();
+  }
+
   List<Word> dayWords(int day) => _days[day] ?? const [];
 
   Future<void> init() async {
@@ -572,14 +653,38 @@ class AppState extends ChangeNotifier {
     _refreshInBackground();
 
     themeSetting = _prefs.getString('theme') ?? 'afternoon';
+    // One-time switch: older installs saved 'auto' (blue by day). Move them to the orange default once.
+    if (!_prefs.containsKey('themeOrangeDefault')) {
+      themeSetting = 'afternoon';
+      await _prefs.setString('theme', themeSetting);
+      await _prefs.setBool('themeOrangeDefault', true);
+    }
+    fontScale = snapFontScale(_prefs.getDouble('fontScale') ?? kDefaultFontScale);
     dailyGoal = _prefs.getInt('dailyGoal') ?? 10;
     displayName = _prefs.getString('displayName');
     onboarded = _prefs.getBool('onboarded') ?? false;
+    primaryLang =
+        _prefs.getString('primaryLang') ?? deviceDefaultPrimaryLang();
+    secondaryLang = _prefs.getString('secondaryLang') ?? defaultSecondaryLang;
+    await _loadLangMaps();
     await _restoreSession();
     currentDay = _prefs.getInt('currentDay') ?? 1;
     reminderEnabled = _prefs.getBool('reminderEnabled') ?? false;
-    reminderHour = _prefs.getInt('reminderHour') ?? 20;
-    reminderMinute = _prefs.getInt('reminderMinute') ?? 0;
+    final savedTimes = _prefs.getStringList('reminderTimes');
+    if (savedTimes != null) {
+      reminderTimes = savedTimes;
+    } else if (_prefs.containsKey('reminderHour')) {
+      // Migrate the old single reminder.
+      final h = _prefs.getInt('reminderHour') ?? 20;
+      final m = _prefs.getInt('reminderMinute') ?? 0;
+      reminderTimes = [_fmtTime(h, m)];
+    }
+    if (reminderEnabled) {
+      ReminderService.sync(
+        enabled: true,
+        times: reminderTimes,
+      ).catchError((_) {});
+    }
 
     progress.addAll(
       (jsonDecode(_prefs.getString('progress') ?? '{}') as Map<String, dynamic>)
@@ -650,6 +755,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Font size multiplier, snapped to one of the fixed font size steps.
+  Future<void> setFontScale(double v) async {
+    fontScale = snapFontScale(v);
+    await _prefs.setDouble('fontScale', fontScale);
+    notifyListeners();
+  }
+
   Future<void> setDailyGoal(int v) async {
     dailyGoal = v;
     await _prefs.setInt('dailyGoal', v);
@@ -662,15 +774,46 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setReminder({bool? enabled, int? hour, int? minute}) async {
-    reminderEnabled = enabled ?? reminderEnabled;
-    reminderHour = hour ?? reminderHour;
-    reminderMinute = minute ?? reminderMinute;
+  static String _fmtTime(int h, int m) =>
+      '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+
+  /// Saves the reminder list and reschedules all notifications.
+  Future<void> _saveReminders() async {
+    reminderTimes = {...reminderTimes}.toList()..sort();
     await _prefs.setBool('reminderEnabled', reminderEnabled);
-    await _prefs.setInt('reminderHour', reminderHour);
-    await _prefs.setInt('reminderMinute', reminderMinute);
+    await _prefs.setStringList('reminderTimes', reminderTimes);
     notifyListeners();
+    await ReminderService.sync(
+      enabled: reminderEnabled,
+      times: reminderTimes,
+    ).catchError((_) {});
   }
+
+  Future<void> setReminderEnabled(bool v) async {
+    reminderEnabled = v;
+    await _saveReminders();
+  }
+
+  /// Replaces the time at [index] (or adds one when [index] is null).
+  Future<void> setReminderTime({int? index, required String time}) async {
+    final list = [...reminderTimes];
+    if (index == null) {
+      list.add(time);
+    } else {
+      list[index] = time;
+    }
+    reminderTimes = list;
+    await _saveReminders();
+  }
+
+  Future<void> removeReminderTime(int index) async {
+    final list = [...reminderTimes]..removeAt(index);
+    reminderTimes = list;
+    await _saveReminders();
+  }
+
+  /// Formats hour/minute as "HH:mm".
+  static String formatReminderTime(int h, int m) => _fmtTime(h, m);
 
   // ---- study plan ----
   Future<void> setDay(int d) async {

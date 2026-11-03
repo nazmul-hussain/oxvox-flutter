@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
 
-/// Loads local data first, then hands off. Also initialises AppState once.
+/// The one splash screen: same picture as the native launch screen (orange icon
+/// and a short description), so the app opens with no second splash.
+/// Loads local data, then hands off to the home screen.
 class SplashScreen extends StatefulWidget {
   final AppState state;
   const SplashScreen({super.key, required this.state});
@@ -25,20 +27,12 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: p.bg,
       body: Center(
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: 'Ox',
-                style: TextStyle(color: p.brand),
-              ),
-              TextSpan(
-                text: 'Vox',
-                style: TextStyle(color: p.brand),
-              ),
-            ],
-          ),
-          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
+        // Same 360x500dp picture as the native launch screen, so there is one splash.
+        child: Image.asset(
+          'assets/images/splash.png',
+          width: 360,
+          height: 500,
+          fit: BoxFit.contain,
         ),
       ),
     );

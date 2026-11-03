@@ -140,7 +140,7 @@ const nightPalette = OxPalette(
   surface2: Color(0xFF323647),
   ink: Color(0xFFF4F5F9),
   muted: Color(0xFF8D93A8),
-  faint: Color(0xFF5F6479),
+  faint: Color(0xFF7A8099),
   line: Color(0xFF383C4F),
   accent: Color(0xFFF4F5F9),
   accentSoft: Color(0xFF343848),
@@ -178,6 +178,52 @@ OxPalette paletteFor(String themeId) => switch (themeId) {
   'night' => nightPalette,
   _ => afternoonPalette,
 };
+
+/// One typography scale for the whole app (logical sizes, before the user's font scale).
+class OxType {
+  OxType._();
+  static const double micro = 10.4; // tiny labels, nav captions
+  static const double caption = 12.8; // hints, meta text
+  static const double small = 13.6; // secondary text, buttons
+  static const double body = 15.2; // main reading text
+  static const double subtitle = 16; // card titles, list words
+  static const double title = 20.8; // hero titles
+  static const double heading = 22.4; // page titles
+  static const double appName = 22; // "Ox Vox" logo in the header
+}
+
+/// Global text scale the app was designed with (the old hardcoded 1.12).
+const double kBaseTextScale = 1.12;
+
+/// Font size slider: free range from smaller than default up to the old Large.
+/// Values move in 0.05 steps; the multiplier is applied on top of kBaseTextScale.
+const double kMinFontScale = 0.7;
+const double kMaxFontScale = 1.15;
+const double kFontScaleStep = 0.05;
+/// The standard size, shown as "Default".
+const double kDefaultFontScale = 0.9;
+
+/// Keeps a value in range and on the 0.05 grid.
+double snapFontScale(double scale) {
+  final clamped = scale.clamp(kMinFontScale, kMaxFontScale).toDouble();
+  final steps = ((clamped - kMinFontScale) / kFontScaleStep).round();
+  return double.parse(
+    (kMinFontScale + steps * kFontScaleStep).toStringAsFixed(2),
+  );
+}
+
+/// Slider divisions between min and max.
+int get kFontScaleDivisions =>
+    ((kMaxFontScale - kMinFontScale) / kFontScaleStep).round();
+
+/// Label for a font scale: "Default", or "Smaller/Larger" with the percent of default.
+String fontSizeLabel(double scale) {
+  if ((scale - kDefaultFontScale).abs() < 0.001) return 'Default';
+  final percent = (scale / kDefaultFontScale * 100).round();
+  return scale < kDefaultFontScale
+      ? 'Smaller ($percent%)'
+      : 'Larger ($percent%)';
+}
 
 /// Web: font-family 'Hind Siliguri' for all UI text.
 ThemeData buildTheme(OxPalette p, Brightness brightness) {

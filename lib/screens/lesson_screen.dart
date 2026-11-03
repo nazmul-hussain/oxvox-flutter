@@ -73,7 +73,7 @@ class _LessonScreenState extends State<LessonScreen> {
       icon: Icon(Icons.chevron_left, size: 16, color: p.accent),
       label: Text(
         'Listening',
-        style: TextStyle(color: p.accent, fontWeight: FontWeight.w700),
+        style: TextStyle(color: p.accent, fontWeight: FontWeight.w500),
       ),
     );
 
@@ -114,7 +114,7 @@ class _LessonScreenState extends State<LessonScreen> {
                       l.title,
                       style: TextStyle(
                         fontSize: 22,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: p.ink,
                       ),
                     ),
@@ -155,7 +155,7 @@ class _LessonScreenState extends State<LessonScreen> {
                             Text(
                               'Result',
                               style: TextStyle(
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                                 color: p.ink,
                               ),
                             ),
@@ -163,7 +163,7 @@ class _LessonScreenState extends State<LessonScreen> {
                               '${answers.where((e) => e).length} / ${quiz.length}',
                               style: TextStyle(
                                 fontSize: 24,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                                 color: p.ink,
                               ),
                             ),
@@ -285,7 +285,7 @@ class _QuizCard extends StatelessWidget {
             q.prompt,
             style: TextStyle(
               fontSize: 16.8,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w500,
               color: p.ink,
             ),
           ),
@@ -371,7 +371,7 @@ class _OptionTile extends StatelessWidget {
             fontSize: 15.2,
             color: fg,
             fontWeight: state == _OptState.good
-                ? FontWeight.w700
+                ? FontWeight.w500
                 : FontWeight.w400,
           ),
         ),
@@ -401,7 +401,7 @@ class _FullButton extends StatelessWidget {
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.2),
+        textStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15.2),
       ),
       child: Text(label),
     );
@@ -431,7 +431,7 @@ class _GhostButton extends StatelessWidget {
       side: BorderSide(color: p.accent),
       backgroundColor: p.surface,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      textStyle: const TextStyle(fontSize: 13.6, fontWeight: FontWeight.w700),
+      textStyle: const TextStyle(fontSize: 13.6, fontWeight: FontWeight.w500),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
   );
@@ -507,7 +507,7 @@ class _PlayerState extends State<_Player> {
             children: [
               Text(
                 widget.title,
-                style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+                style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
               ),
               const SizedBox(height: 10),
               StreamBuilder<Duration>(

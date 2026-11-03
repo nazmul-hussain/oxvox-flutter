@@ -133,7 +133,7 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Text(
             label,
             style: TextStyle(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w500,
               color: active ? p.accentInk : p.muted,
             ),
           ),
@@ -147,7 +147,7 @@ class _AuthScreenState extends State<AuthScreen> {
     final p = widget.p;
     final brandStyle = TextStyle(
       fontSize: 28.8,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w500,
       color: p.brand,
     );
     return Scaffold(
@@ -189,7 +189,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           style: TextStyle(
                             color: p.onBrand,
                             fontSize: 28.8,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),

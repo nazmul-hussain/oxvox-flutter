@@ -37,7 +37,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
   AppState get s => widget.state;
 
   List<PlacementQuestion> _build() =>
-      buildPlacement(s.placementPools(), s.placementUsed);
+      buildPlacement(s.placementPools(), s.placementUsed, s.meaningOf);
 
   @override
   void dispose() {
@@ -135,7 +135,9 @@ class _PlacementScreenState extends State<PlacementScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                bn ? 'Choose the English word' : 'Choose the Bangla meaning',
+                bn
+                    ? 'Choose the English word'
+                    : 'Choose the ${s.primaryMeaningLang.name} meaning',
                 style: TextStyle(color: p.muted, fontSize: 12.8),
               ),
               const SizedBox(height: 6),
@@ -144,7 +146,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                 style: TextStyle(
                   color: p.ink,
                   fontSize: 22,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 14),
@@ -188,7 +190,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
           style: TextStyle(
             color: p.ink,
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ),
@@ -219,12 +221,12 @@ class _PlacementScreenState extends State<PlacementScreen> {
                 style: TextStyle(
                   color: p.accent,
                   fontSize: 40,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               Text(
                 _levelName(r.level),
-                style: TextStyle(color: p.ink, fontWeight: FontWeight.w700),
+                style: TextStyle(color: p.ink, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 6),
               Text(
@@ -278,7 +280,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
           width: 36,
           child: Text(
             c,
-            style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+            style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
           ),
         ),
         Expanded(

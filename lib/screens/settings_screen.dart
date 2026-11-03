@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../core/languages.dart';
 import '../core/plan.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../services/backup_service.dart';
 import '../services/reminder_service.dart';
+import '../widgets/join_groups_bar.dart';
 import 'account_panel.dart';
 import 'placement_screen.dart';
 
@@ -40,8 +42,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    // Web has no daily reminders; cancel one an older build may have scheduled.
-    ReminderService.cancelLegacyReminder().catchError((_) {});
   }
 
   void _setMessage(String text) {
@@ -90,8 +90,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Text(
           title,
           style: TextStyle(
-            fontSize: 22.4,
-            fontWeight: FontWeight.w700,
+            fontSize: OxType.heading,
+            fontWeight: FontWeight.w500,
             color: widget.p.ink,
           ),
         ),
@@ -102,8 +102,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           foregroundColor: widget.p.accent,
           side: BorderSide(color: widget.p.accent),
           textStyle: const TextStyle(
-            fontSize: 13.6,
-            fontWeight: FontWeight.w700,
+            fontSize: OxType.small,
+            fontWeight: FontWeight.w500,
           ),
         ),
         child: const Text('Close'),
@@ -185,14 +185,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             Text(
                               title,
                               style: TextStyle(
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                                 color: p.ink,
-                                fontSize: 15.2,
+                                fontSize: OxType.body,
                               ),
                             ),
                             Text(
                               sub,
-                              style: TextStyle(color: p.muted, fontSize: 12.8),
+                              style: TextStyle(color: p.muted, fontSize: OxType.caption),
                             ),
                           ],
                         ),
@@ -204,6 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+        JoinGroupsBar(p: p),
       ],
     );
   }
@@ -227,13 +228,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(
                       'Level test',
                       style: TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: p.ink,
                       ),
                     ),
                     Text(
                       '40 questions. Finds your starting level. Retakes use new words.',
-                      style: TextStyle(color: p.muted, fontSize: 13.6),
+                      style: TextStyle(color: p.muted, fontSize: OxType.small),
                     ),
                   ],
                 ),
@@ -256,11 +257,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               Text(
                 'Levels',
-                style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+                style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
               ),
               Text(
                 'Tap to pick one or more. All selected levels are mixed into one plan.',
-                style: TextStyle(color: p.muted, fontSize: 13.6),
+                style: TextStyle(color: p.muted, fontSize: OxType.small),
               ),
               const SizedBox(height: 10),
               Wrap(
@@ -280,14 +281,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Text(
                       'Finish in ${s.planDays} days',
                       style: TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: p.ink,
                       ),
                     ),
                   ),
                   Text(
                     '${s.perDayText} words per day',
-                    style: TextStyle(color: p.muted, fontSize: 13.6),
+                    style: TextStyle(color: p.muted, fontSize: OxType.small),
                   ),
                 ],
               ),
@@ -311,7 +312,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       selectedColor: p.accent,
                       labelStyle: TextStyle(
                         color: s.planDays == d ? p.accentInk : p.ink,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                       ),
                       onSelected: (_) => s.setPlanDays(d),
                     ),
@@ -320,11 +321,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 8),
               Text(
                 '${_fmtNum(s.planWords.length)} words in ${s.totalDays} days, ${s.perDayText} per day.',
-                style: TextStyle(color: p.muted, fontSize: 13.6),
+                style: TextStyle(color: p.muted, fontSize: OxType.small),
               ),
               Text(
                 'All levels together: ${_fmtNum(total)} words.',
-                style: TextStyle(color: p.muted, fontSize: 13.6),
+                style: TextStyle(color: p.muted, fontSize: OxType.small),
               ),
             ],
           ),
@@ -339,13 +340,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(
                       'Native-speech topics',
                       style: TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: p.ink,
                       ),
                     ),
                     Text(
                       'Includes phrasal verbs, idioms, fillers, collocations, linkers, and hedging. Mixed into daily words, study, and quizzes.',
-                      style: TextStyle(color: p.muted, fontSize: 13.6),
+                      style: TextStyle(color: p.muted, fontSize: OxType.small),
                     ),
                   ],
                 ),
@@ -366,7 +367,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final p = widget.p;
     final id = l['id'] as String;
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(999),
       onTap: () {
         final next = [...s.levels];
         if (on) {
@@ -377,34 +378,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
         s.setLevels(next);
       },
       child: Container(
-        width: 150,
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: on ? p.accentSoft : p.surface,
-          border: Border.all(color: on ? p.accent : p.line, width: on ? 2 : 1),
-          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: on ? p.accent : p.line,
+            width: on ? 1.5 : 1,
+          ),
+          borderRadius: BorderRadius.circular(999),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              id,
-              style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
-            ),
-            Text(
-              l['name'] as String,
-              style: TextStyle(color: p.ink, fontSize: 12.8),
-            ),
-            if (s.placementSuggested == id)
-              Text(
-                'Level test',
-                style: TextStyle(color: p.accent, fontSize: 12),
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: id,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: on ? p.accent : p.muted,
+                ),
               ),
-            Text(
-              '${_fmtNum(l['count'] as int)} words',
-              style: TextStyle(color: p.muted, fontSize: 12.8),
-            ),
-          ],
+              TextSpan(
+                text: '  ${l['name'] as String}',
+                style: TextStyle(color: p.ink, fontSize: 12.8),
+              ),
+              if (s.placementSuggested == id)
+                TextSpan(
+                  text: '  · test',
+                  style: TextStyle(color: p.accent, fontSize: 11),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -433,6 +436,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _profile(AppState s) => AccountPanel(state: s, p: widget.p);
 
+  Widget _langChips({
+    required String selected,
+    required ValueChanged<String> onPick,
+    bool includeNone = false,
+  }) {
+    final p = widget.p;
+    final value = (selected == secondaryNone || langByCode(selected) != null)
+        ? selected
+        : (includeNone ? secondaryNone : fallbackPrimaryLang);
+    return DropdownButtonFormField<String>(
+      key: ValueKey('lang-$includeNone-$value'),
+      initialValue: value,
+      isExpanded: true,
+      dropdownColor: p.surface,
+      style: TextStyle(color: p.ink, fontSize: OxType.body),
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      items: [
+        if (includeNone)
+          const DropdownMenuItem(value: secondaryNone, child: Text('None')),
+        for (final l in meaningLangs)
+          DropdownMenuItem(
+            value: l.code,
+            child: Text('${l.native} (${l.name})'),
+          ),
+      ],
+      onChanged: (code) {
+        if (code != null) onPick(code);
+      },
+    );
+  }
+
   Widget _app(AppState s) {
     final p = widget.p;
     return Column(
@@ -443,8 +481,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
+                'Meaning language',
+                style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Shown on every word card, under the English word.',
+                style: TextStyle(color: p.muted, fontSize: OxType.small),
+              ),
+              const SizedBox(height: 8),
+              _langChips(
+                selected: s.primaryLang,
+                onPick: (code) => s.setPrimaryLang(code),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Second language',
+                style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Shown as a second line next to the meaning. Choose None to hide it.',
+                style: TextStyle(color: p.muted, fontSize: OxType.small),
+              ),
+              const SizedBox(height: 8),
+              _langChips(
+                selected: s.secondaryLang,
+                includeNone: true,
+                onPick: (code) => s.setSecondaryLang(code),
+              ),
+            ],
+          ),
+        ),
+        _card(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
                 'Theme',
-                style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+                style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -458,7 +533,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       selectedColor: p.accent,
                       labelStyle: TextStyle(
                         color: s.themeSetting == id ? p.accentInk : p.ink,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                       ),
                       onSelected: (_) => s.setTheme(id),
                     ),
@@ -471,9 +546,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  Text(
+                    'Font size',
+                    style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
+                  ),
+                  const Spacer(),
+                  Text(
+                    fontSizeLabel(s.fontScale),
+                    style: TextStyle(color: p.muted, fontSize: OxType.small),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Text('A', style: TextStyle(color: p.muted, fontSize: OxType.caption)),
+                  Expanded(
+                    child: Slider(
+                      value: s.fontScale,
+                      min: kMinFontScale,
+                      max: kMaxFontScale,
+                      divisions: kFontScaleDivisions,
+                      label: fontSizeLabel(s.fontScale),
+                      activeColor: p.accent,
+                      onChanged: (v) => s.setFontScale(v),
+                    ),
+                  ),
+                  Text('A', style: TextStyle(color: p.muted, fontSize: OxType.heading)),
+                ],
+              ),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: p.bg,
+                  border: Border.all(color: p.line),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'The quick brown fox jumps over the lazy dog.',
+                      style: TextStyle(color: p.ink, fontSize: OxType.body),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Ox Vox helps you learn a new word every day.',
+                      style: TextStyle(color: p.ink, fontSize: OxType.body),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'abundant · curious · reliable',
+                      style: TextStyle(
+                        color: p.accent,
+                        fontWeight: FontWeight.w500,
+                        fontSize: OxType.subtitle,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        _card(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
                 'Data',
-                style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+                style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -515,14 +659,152 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     _message!,
-                    style: TextStyle(color: p.muted, fontSize: 13.6),
+                    style: TextStyle(color: p.muted, fontSize: OxType.small),
                   ),
                 ),
             ],
           ),
         ),
+        _reminders(s),
       ],
     );
+  }
+
+  Widget _reminders(AppState s) {
+    final p = widget.p;
+    return _card(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Study reminders',
+                      style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
+                    ),
+                    Text(
+                      'Get a notification at each time to study.',
+                      style: TextStyle(color: p.muted, fontSize: 13.6),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: s.reminderEnabled,
+                activeThumbColor: p.accent,
+                onChanged: _toggleReminders,
+              ),
+            ],
+          ),
+          if (s.reminderEnabled) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Tap a time to change it',
+              style: TextStyle(color: p.muted, fontSize: 12.8),
+            ),
+            const SizedBox(height: 6),
+            for (var i = 0; i < s.reminderTimes.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => _editReminder(s, i),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: p.accentSoft,
+                            border: Border.all(color: p.accent, width: 1.5),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.schedule, color: p.accent, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _formatForDisplay(s.reminderTimes[i]),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: p.accent,
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.edit_outlined, color: p.accent, size: 18),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove time',
+                      onPressed: () => s.removeReminderTime(i),
+                      icon: Icon(Icons.close, color: p.muted),
+                    ),
+                  ],
+                ),
+              ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () => _editReminder(s, null),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: p.accent,
+                  side: BorderSide(color: p.accent),
+                ),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add time'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleReminders(bool on) async {
+    final s = widget.state;
+    if (on) {
+      final granted = await ReminderService.requestPermission();
+      if (!granted) {
+        _setMessage('Allow notifications in your device settings to get reminders.');
+        return;
+      }
+    }
+    await s.setReminderEnabled(on);
+  }
+
+  Future<void> _editReminder(AppState s, int? index) async {
+    final current = index == null
+        ? const TimeOfDay(hour: 20, minute: 0)
+        : _parseTime(s.reminderTimes[index]);
+    final picked = await showTimePicker(context: context, initialTime: current);
+    if (picked == null) return;
+    final time = AppState.formatReminderTime(picked.hour, picked.minute);
+    await s.setReminderTime(index: index, time: time);
+  }
+
+  static TimeOfDay _parseTime(String t) {
+    final parts = t.split(':');
+    return TimeOfDay(
+      hour: int.tryParse(parts[0]) ?? 20,
+      minute: parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0,
+    );
+  }
+
+  String _formatForDisplay(String t) {
+    final tod = _parseTime(t);
+    return tod.format(context);
   }
 
   Future<void> _export() async {

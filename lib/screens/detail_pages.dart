@@ -44,7 +44,7 @@ class MissedScreen extends StatelessWidget {
                       ),
                       textStyle: const TextStyle(
                         fontSize: 13.6,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -73,7 +73,7 @@ class MissedScreen extends StatelessWidget {
                             style: TextStyle(
                               color: p.ink,
                               fontSize: 22,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                           Text(
@@ -124,7 +124,7 @@ class MissedScreen extends StatelessWidget {
                           child: WordCard(
                             w: m.w,
                             p: p,
-                            arabic: state.content?.arabic[m.w.id],
+                            lines: state.lineOf(m.w),
                             showSynonyms: state.showSynonyms,
                             meta: 'Missed ${m.count}×',
                             onTap: () => _open(context, m.w),
@@ -163,7 +163,7 @@ class MissedScreen extends StatelessWidget {
       context,
       w,
       p,
-      arabic: state.content?.arabic[w.id],
+      lines: state.lineOf(w),
       exampleBn: state.content?.exampleBn ?? const {},
       saved: state.bookmarks.containsKey(w.id),
       onToggleSave: () => state.toggleBookmark(w.id),
@@ -239,7 +239,7 @@ class _SavedScreenState extends State<SavedScreen> {
                       Text(
                         'Saved words quiz',
                         style: TextStyle(
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                           color: p.ink,
                         ),
                       ),
@@ -286,14 +286,14 @@ class _SavedScreenState extends State<SavedScreen> {
                   child: WordCard(
                     w: w,
                     p: p,
-                    arabic: s.content?.arabic[w.id],
+                    lines: s.lineOf(w),
                     showSynonyms: s.showSynonyms,
                     meta: _meta(s, w.id),
                     onTap: () => showWordSheet(
                       context,
                       w,
                       p,
-                      arabic: s.content?.arabic[w.id],
+                      lines: s.lineOf(w),
                       exampleBn: s.content?.exampleBn ?? const {},
                       saved: true,
                       onToggleSave: () => s.toggleBookmark(w.id),

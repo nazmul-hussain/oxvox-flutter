@@ -40,9 +40,9 @@ class BackupService {
       'quizCount': 30,
       'theme': s.themeSetting,
       'version': 3,
-      // Daily reminders were removed on the web app, so these stay at web defaults.
-      'reminderOn': false,
-      'reminderTimes': ['19:00'],
+      // Daily reminder on/off and its "HH:mm" times (list).
+      'reminderOn': s.reminderEnabled,
+      'reminderTimes': s.reminderTimes,
       'reminded': <String>[],
     },
   };

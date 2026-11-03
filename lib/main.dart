@@ -32,7 +32,11 @@ class OxvoxApp extends StatelessWidget {
           themeMode: themeId == 'night' ? ThemeMode.dark : ThemeMode.light,
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context)
-                .copyWith(textScaler: const TextScaler.linear(1.12)),
+                .copyWith(
+                  textScaler: TextScaler.linear(
+                    kBaseTextScale * state.fontScale,
+                  ),
+                ),
             child: child!,
           ),
           home: state.loading

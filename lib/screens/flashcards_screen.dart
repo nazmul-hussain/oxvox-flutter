@@ -111,7 +111,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                         style: TextStyle(
                           color: p.accent,
                           fontSize: 24,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -126,7 +126,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                     children: [
                       // Web: .bangla.big (the .bangla size wins: 1.1rem).
                       Text(
-                        card.meaning,
+                        widget.state.meaningOf(card),
                         textAlign: TextAlign.center,
                         style: TextStyle(color: p.ink, fontSize: 17.6),
                       ),
@@ -182,7 +182,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                 ),
                 textStyle: const TextStyle(
                   fontSize: 13.6,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -216,7 +216,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
               style: TextStyle(
                 color: p.ink,
                 fontSize: 24,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 6),

@@ -102,7 +102,7 @@ class _CountBoxState extends State<_CountBox> {
         keyboardType: TextInputType.number,
         textAlign: TextAlign.center,
         style: TextStyle(
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w500,
           fontSize: 16,
           color: p.ink,
         ),
@@ -176,7 +176,7 @@ class _QuizSetupCardState extends State<QuizSetupCard> {
         children: [
           Text(
             'How many questions? · ${widget.title}',
-            style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
+            style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
           ),
           CountPicker(
             p: p,
@@ -228,6 +228,144 @@ class _QuizSetupCardState extends State<QuizSetupCard> {
   }
 }
 
+/// Bottom sheet to pick the question count for a day quiz, then start it.
+/// Uses the same count rules as the rest of the app (quizMinCount / defaultQuizCount).
+Future<void> showDayQuizCountSheet(
+  BuildContext context, {
+  required AppState state,
+  required OxPalette p,
+  required int day,
+  required List<Word> pool,
+  List<Word> distractPool = const [],
+}) async {
+  final n = pool.length;
+  if (n == 0) return;
+  final min = quizMinCount(n);
+  final count = await showModalBottomSheet<int>(
+    context: context,
+    backgroundColor: p.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) => _QuizCountSheet(
+      p: p,
+      title: 'Day $day quiz',
+      min: min,
+      max: n,
+      initial: defaultQuizCount(n).clamp(min, n).toInt(),
+    ),
+  );
+  if (count == null || !context.mounted) return;
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => QuizScreen(
+        state: state,
+        p: p,
+        title: 'Day $day quiz',
+        day: day,
+        pool: pool,
+        count: count,
+        distractPool: distractPool.isEmpty ? pool : distractPool,
+      ),
+    ),
+  );
+}
+
+class _QuizCountSheet extends StatefulWidget {
+  final OxPalette p;
+  final String title;
+  final int min;
+  final int max;
+  final int initial;
+  const _QuizCountSheet({
+    required this.p,
+    required this.title,
+    required this.min,
+    required this.max,
+    required this.initial,
+  });
+
+  @override
+  State<_QuizCountSheet> createState() => _QuizCountSheetState();
+}
+
+class _QuizCountSheetState extends State<_QuizCountSheet> {
+  late int _value = widget.initial;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.p;
+    final canSlide = widget.max > widget.min;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.title,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 18,
+                color: p.ink,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'How many questions?',
+              style: TextStyle(color: p.muted, fontSize: 13.6),
+            ),
+            const SizedBox(height: 14),
+            Center(
+              child: Text(
+                '$_value',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 36,
+                  color: p.accent,
+                ),
+              ),
+            ),
+            if (canSlide)
+              Slider(
+                value: _value.toDouble(),
+                min: widget.min.toDouble(),
+                max: widget.max.toDouble(),
+                divisions: widget.max - widget.min,
+                label: '$_value',
+                activeColor: p.accent,
+                onChanged: (v) => setState(() => _value = v.round()),
+              )
+            else
+              Center(
+                child: Text(
+                  'Only ${widget.max} questions available',
+                  style: TextStyle(color: p.muted),
+                ),
+              ),
+            Text(
+              '${widget.min} to ${widget.max} questions',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: p.muted, fontSize: 12.8),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(_value),
+              style: FilledButton.styleFrom(
+                backgroundColor: p.accent,
+                foregroundColor: p.accentInk,
+                minimumSize: const Size.fromHeight(46),
+              ),
+              child: const Text('Start'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Web: components/Quiz.js. Auto-advances 0.9s after each answer, saves the result,
 /// updates spaced repetition, and offers a review of all answers.
 class QuizScreen extends StatefulWidget {
@@ -258,6 +396,7 @@ class _QuizScreenState extends State<QuizScreen> {
     widget.pool,
     widget.count,
     widget.distractPool,
+    widget.state.meaningOf,
   );
   final List<String?> _answers = [];
   int _index = 0;
@@ -343,7 +482,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   style: TextStyle(
                     color: p.ink,
                     fontSize: 18,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -385,7 +524,7 @@ class _QuizScreenState extends State<QuizScreen> {
         elevation: 0,
         title: Text(
           widget.title,
-          style: TextStyle(color: p.ink, fontWeight: FontWeight.w700),
+          style: TextStyle(color: p.ink, fontWeight: FontWeight.w500),
         ),
       ),
       body: SafeArea(
@@ -408,9 +547,8 @@ class _QuizScreenState extends State<QuizScreen> {
         : '${widget.title} · Question ${_index + 1} of $n · Score $_score';
     final bn2en = q.dir == 'bn2en';
     final gap = q.dir == 'gap';
-    final promptArabic = q.dir == 'en2bn'
-        ? s.content?.arabic[q.word.word.toLowerCase()]
-        : null;
+    // Second language line under an English prompt (en2bn shows the English word).
+    final promptSecond = q.dir == 'en2bn' ? s.secondaryForId(q.word.id) : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -422,7 +560,7 @@ class _QuizScreenState extends State<QuizScreen> {
               onPressed: () => setState(() => _reviewing = false),
               child: Text(
                 'Done',
-                style: TextStyle(color: p.accent, fontWeight: FontWeight.w700),
+                style: TextStyle(color: p.accent, fontWeight: FontWeight.w500),
               ),
             ),
           ),
@@ -456,7 +594,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     ? 'Choose the word that fits the gap'
                     : bn2en
                     ? 'Choose the English word for'
-                    : 'Choose the Bangla meaning of',
+                    : 'Choose the ${s.primaryMeaningLang.name} meaning of',
                 style: TextStyle(fontSize: 13.6, color: p.muted),
               ),
               const SizedBox(height: 6),
@@ -465,16 +603,18 @@ class _QuizScreenState extends State<QuizScreen> {
                 style: TextStyle(
                   fontSize: gap ? 18.4 : (bn2en ? 22 : 28),
                   height: gap ? 1.6 : null,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                   color: gap || bn2en ? p.ink : p.accent,
                 ),
               ),
-              if (promptArabic != null)
+              if (promptSecond != null)
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    promptArabic,
-                    textDirection: TextDirection.rtl,
+                    promptSecond,
+                    textDirection: s.secondaryMeaningLang?.rtl ?? false
+                        ? TextDirection.rtl
+                        : null,
                     style: TextStyle(fontSize: 19.2, color: p.accent),
                   ),
                 ),
@@ -554,10 +694,9 @@ class _QuizScreenState extends State<QuizScreen> {
         fg = p.red;
       }
     }
-    // Web: Arabic on options for bn2en and gap questions, not en2bn.
-    final arabic = q.dir != 'en2bn'
-        ? s.content?.arabic[opt.toLowerCase()]
-        : null;
+    // Second language on options for bn2en and gap questions, not en2bn.
+    final second = q.dir != 'en2bn' ? s.secondaryForId(opt.toLowerCase()) : null;
+    final optRtl = q.dir == 'en2bn' && s.primaryMeaningLang.rtl;
     return InkWell(
       onTap: locked ? null : () => _pick(opt),
       borderRadius: BorderRadius.circular(12),
@@ -574,19 +713,22 @@ class _QuizScreenState extends State<QuizScreen> {
             Expanded(
               child: Text(
                 opt,
+                textDirection: optRtl ? TextDirection.rtl : null,
                 style: TextStyle(
                   fontSize: bn2en ? 16.8 : 17.6,
                   color: fg,
                   fontWeight: (answered || _reviewing) && opt == q.answer
-                      ? FontWeight.w700
+                      ? FontWeight.w500
                       : FontWeight.w500,
                 ),
               ),
             ),
-            if (arabic != null)
+            if (second != null)
               Text(
-                arabic,
-                textDirection: TextDirection.rtl,
+                second,
+                textDirection: (s.secondaryMeaningLang?.rtl ?? false)
+                    ? TextDirection.rtl
+                    : null,
                 style: TextStyle(fontSize: 16, color: fg),
               ),
           ],
@@ -639,7 +781,7 @@ class _QuizScreenState extends State<QuizScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 22.4,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w500,
             color: p.ink,
           ),
         ),
@@ -670,7 +812,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     style: TextStyle(
                       color: Color(0xFFFDE68A),
                       fontSize: 26,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -689,7 +831,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 56,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   Text(
@@ -697,7 +839,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     style: const TextStyle(
                       color: Color(0xFFFDE68A),
                       fontSize: 26,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -707,7 +849,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -716,7 +858,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     style: const TextStyle(
                       color: Color(0xFFFDE68A),
                       fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -772,7 +914,7 @@ class _QuizScreenState extends State<QuizScreen> {
                 'Words to review',
                 style: TextStyle(
                   fontSize: 16.8,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                   color: p.ink,
                 ),
               ),
@@ -804,12 +946,12 @@ class _QuizScreenState extends State<QuizScreen> {
                         _questions[i].word.word,
                         style: TextStyle(
                           fontSize: 17.6,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                           color: p.ink,
                         ),
                       ),
                       Text(
-                        _questions[i].word.meaning,
+                        s.meaningOf(_questions[i].word),
                         style: TextStyle(fontSize: 15.2, color: p.muted),
                       ),
                     ],
@@ -843,7 +985,7 @@ class _QuizScreenState extends State<QuizScreen> {
     ),
     child: Text(
       text,
-      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg),
+      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: fg),
     ),
   );
 }
