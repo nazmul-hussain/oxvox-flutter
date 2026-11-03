@@ -2,8 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+
+import '../core/reminder_plan.dart';
 
 /// Daily study reminders. Each "HH:mm" time gets its own repeating
 /// notification (id = [_baseId] + index). Mobile only; web is a no-op.
@@ -14,12 +17,11 @@ import 'package:timezone/timezone.dart' as tz;
 class ReminderService {
   static const _baseId = 100;
   static const _maxReminders = 20;
-  static const _channelId = 'daily_study';
-  static const _body = "Time to study! Open OxVox to continue today's words.";
+  // New id: Android fixes a channel's sound when it is created, so the custom sound needs a new channel.
+  static const _channelId = 'daily_study_sound';
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _ready = false;
   static bool _enabled = false;
-  static List<String> _times = const [];
   static _LifecycleWatcher? _watcher;
 
   static Future<void> _init() async {
@@ -41,34 +43,42 @@ class ReminderService {
     } catch (_) {
       // Falls back to the default (UTC) location.
     }
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _channelId,
+            'Daily study reminders',
+            description: 'Reminds you to study your daily words',
+            importance: Importance.high,
+            sound: RawResourceAndroidNotificationSound('chime'),
+          ),
+        );
     _watcher ??= _LifecycleWatcher()..attach();
     _ready = true;
   }
 
-  /// Asks for notification permission (Android 13+, iOS). Returns true if granted.
+  /// True when the app may show notifications right now.
+  static Future<bool> notificationsAllowed() async {
+    if (kIsWeb) return false;
+    return (await Permission.notification.status).isGranted;
+  }
+
+  /// Asks for notification permission. Android stops showing the prompt after
+  /// two refusals, and "Don't ask again" is permanent, so in those cases the
+  /// system app settings are opened instead. Returns true if granted.
   static Future<bool> requestPermission() async {
     if (kIsWeb) return false;
     await _init();
-    final android = _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
-    if (android != null) {
-      return await android.requestNotificationsPermission() ?? false;
+    final status = await Permission.notification.status;
+    if (status.isGranted) return true;
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      await openAppSettings();
+      return false;
     }
-    final ios = _plugin
-        .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin
-        >();
-    if (ios != null) {
-      return await ios.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          ) ??
-          false;
-    }
-    return true;
+    return (await Permission.notification.request()).isGranted;
   }
 
   /// Stores the reminder settings. Schedules them now only if the app is in the
@@ -80,7 +90,6 @@ class ReminderService {
     if (kIsWeb) return;
     await _init();
     _enabled = enabled;
-    _times = List.of(times);
     final inForeground =
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     if (inForeground || !enabled) {
@@ -90,9 +99,12 @@ class ReminderService {
     }
   }
 
+  /// Supplies the planned nudges for the next days (set by AppState).
+  static Future<List<NudgeMessage>> Function()? planner;
+
   static Future<void> _scheduleAll() async {
     await _plugin.cancelAll();
-    if (!_enabled) return;
+    if (!_enabled || planner == null) return;
 
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
@@ -101,38 +113,23 @@ class ReminderService {
         channelDescription: 'Reminds you to study your daily words',
         importance: Importance.high,
         priority: Priority.high,
+        sound: RawResourceAndroidNotificationSound('chime'),
       ),
       iOS: DarwinNotificationDetails(),
     );
 
-    final now = tz.TZDateTime.now(tz.local);
-    for (var i = 0; i < _times.length && i < _maxReminders; i++) {
-      final parts = _times[i].split(':');
-      if (parts.length != 2) continue;
-      final hour = int.tryParse(parts[0]);
-      final minute = int.tryParse(parts[1]);
-      if (hour == null || minute == null) continue;
-
-      var at = tz.TZDateTime(
-        tz.local,
-        now.year,
-        now.month,
-        now.day,
-        hour,
-        minute,
-      );
-      if (!at.isAfter(now)) at = at.add(const Duration(days: 1));
-
+    final nudges = await planner!();
+    for (var i = 0; i < nudges.length && i < _maxReminders; i++) {
+      final n = nudges[i];
       await _plugin.zonedSchedule(
         id: _baseId + i,
-        title: 'OxVox',
-        body: _body,
-        scheduledDate: at,
+        title: n.title,
+        body: n.body,
+        scheduledDate: tz.TZDateTime.from(n.at, tz.local),
         notificationDetails: details,
         // Inexact keeps us free of the SCHEDULE_EXACT_ALARM permission;
         // a few minutes of drift is fine for a study reminder.
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
       );
     }
   }

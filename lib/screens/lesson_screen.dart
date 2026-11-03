@@ -357,7 +357,7 @@ class _OptionTile extends StatelessWidget {
     return InkWell(
       onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(12),
-      child: Container(
+      child: Ink(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
@@ -397,8 +397,8 @@ class _FullButton extends StatelessWidget {
     final btn = FilledButton(
       onPressed: onTap,
       style: FilledButton.styleFrom(
-        backgroundColor: p.brand,
-        foregroundColor: Colors.white,
+        backgroundColor: p.action,
+        foregroundColor: p.onBrand,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15.2),
@@ -528,7 +528,7 @@ class _PlayerState extends State<_Player> {
                             width: 48,
                             height: 48,
                             decoration: BoxDecoration(
-                              color: p.brand,
+                              color: p.action,
                               shape: BoxShape.circle,
                             ),
                             child: Icon(

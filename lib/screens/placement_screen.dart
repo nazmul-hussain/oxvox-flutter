@@ -177,7 +177,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
     return InkWell(
       onTap: answered ? null : () => _choose(o.wid),
       borderRadius: BorderRadius.circular(12),
-      child: Container(
+      child: Ink(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(

@@ -1,6 +1,7 @@
 import '../core/languages.dart';
 import '../core/listening.dart';
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -8,9 +9,11 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/plan.dart';
+import '../core/reminder_plan.dart';
 import '../core/srs.dart';
 import '../core/theme.dart';
 import '../services/api_client.dart';
+import '../services/backup_service.dart';
 import '../models/topic.dart';
 import '../models/word.dart';
 import 'content_repository.dart';
@@ -36,7 +39,7 @@ class AppState extends ChangeNotifier {
   // reminders
   bool reminderEnabled = false;
   // Daily reminder times as "HH:mm", sorted, unique.
-  List<String> reminderTimes = ['20:00'];
+  List<String> reminderTimes = ['21:00'];
 
   // progress: wordId -> SrsCard
   final Map<String, SrsCard> progress = {};
@@ -214,6 +217,8 @@ class AppState extends ChangeNotifier {
     placementSuggested = level;
     await _prefs.setString('placementLast', jsonEncode(placementLast));
     await _prefs.setString('placementSuggested', level);
+    // Select the tested level in the plan by default.
+    await setLevels([level]);
     notifyListeners();
   }
 
@@ -324,6 +329,74 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- cloud sync (same blob as the web app: GET/PUT /api/data) ----
+  // Server data wins on sign-in (like web). Local changes are pushed after a short delay.
+  // Nothing is pushed until the server data has been loaded, so defaults never overwrite it.
+  Timer? _pushTimer;
+  bool _remoteReady = false;
+  bool _applyingRemote = false;
+
+  static Map<String, Map<String, int>> activityOf(Object? v) {
+    if (v is! Map) return {};
+    return {
+      for (final e in v.entries)
+        e.key as String: {
+          for (final x in (e.value as Map).entries) x.key as String: (x.value as num).toInt(),
+        },
+    };
+  }
+
+  /// Uploads this device's data to the account.
+  Future<void> _pushNow() async {
+    if (!isSignedIn) return;
+    await api.request(
+      'PUT',
+      'data',
+      body: {'data': BackupService.buildBackup(this)},
+    );
+  }
+
+  /// Loads the account data from the server and replaces local data.
+  /// If the account has no data yet, this device's data is uploaded instead.
+  /// Returns false when the server could not be reached or the data is unreadable.
+  Future<bool> _pullRemote() async {
+    if (!isSignedIn) return false;
+    try {
+      final res = await api.request('GET', 'data');
+      final raw = res['data'];
+      if (raw is Map<String, dynamic>) {
+        _applyingRemote = true;
+        try {
+          final parsed = BackupService.parseBackup(raw);
+          await applyBackup(parsed);
+        } finally {
+          _applyingRemote = false;
+        }
+      } else {
+        await _pushNow();
+      }
+      _remoteReady = true;
+      return true;
+    } on ApiException catch (e) {
+      if (e.status == 401) {
+        await api.clearSession();
+        await _setUser(null);
+      }
+      return false;
+    } catch (_) {
+      // Bad data from the server: keep local data and do not upload over it.
+      return false;
+    }
+  }
+
+  void _queuePush() {
+    if (!_remoteReady || _applyingRemote || !isSignedIn) return;
+    _pushTimer?.cancel();
+    _pushTimer = Timer(const Duration(milliseconds: 600), () {
+      _pushNow().catchError((_) {});
+    });
+  }
+
   /// On start: ask the server who is signed in. Offline, fall back to the last known account.
   Future<void> _restoreSession() async {
     final cached = _prefs.getString('accountUser');
@@ -357,6 +430,7 @@ class AppState extends ChangeNotifier {
         body: {'name': name, 'identifier': identifier, 'password': password},
       );
       await _setUser(_userOf(res['user'] as Map<String, dynamic>));
+      await _pullRemote();
       return null;
     } on ApiException catch (e) {
       return e.message;
@@ -375,6 +449,7 @@ class AppState extends ChangeNotifier {
         body: {'identifier': identifier, 'password': password},
       );
       await _setUser(_userOf(res['user'] as Map<String, dynamic>));
+      await _pullRemote();
       return null;
     } on ApiException catch (e) {
       return e.message;
@@ -382,6 +457,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logOut() async {
+    _pushTimer?.cancel();
+    _remoteReady = false;
     try {
       await api.request('POST', 'auth/logout');
     } on ApiException {
@@ -389,6 +466,8 @@ class AppState extends ChangeNotifier {
     }
     await api.clearSession();
     await _setUser(null);
+    // Like the web app: the next person on this device starts clean. The account data stays on the server.
+    await resetProgress();
   }
 
   /// Account > Save profile (web Account.js saveProfile).
@@ -433,6 +512,8 @@ class AppState extends ChangeNotifier {
     } on ApiException catch (e) {
       return e.message;
     }
+    _pushTimer?.cancel();
+    _remoteReady = false;
     await api.clearSession();
     await _setUser(null);
     await resetProgress();
@@ -464,7 +545,9 @@ class AppState extends ChangeNotifier {
     progress
       ..clear()
       ..addAll(b['progress'] as Map<String, SrsCard>);
-    activity.clear();
+    activity
+      ..clear()
+      ..addAll(b['activity'] as Map<String, Map<String, int>>? ?? {});
     bookmarks
       ..clear()
       ..addAll(b['bookmarks'] as Map<String, Map<String, dynamic>>);
@@ -493,7 +576,7 @@ class AppState extends ChangeNotifier {
       'progress',
       jsonEncode(progress.map((k, v) => MapEntry(k, v.toJson()))),
     );
-    await _prefs.remove('activity');
+    await _prefs.setString('activity', jsonEncode(activity));
     await _prefs.setString(
       'completedDays',
       jsonEncode(completedDays.map((k, v) => MapEntry('$k', v))),
@@ -669,7 +752,10 @@ class AppState extends ChangeNotifier {
     await _loadLangMaps();
     await _restoreSession();
     currentDay = _prefs.getInt('currentDay') ?? 1;
-    reminderEnabled = _prefs.getBool('reminderEnabled') ?? false;
+    // Default: a daily reminder at 9pm for new installs.
+    final firstRun = !_prefs.containsKey('reminderEnabled');
+    reminderEnabled = _prefs.getBool('reminderEnabled') ?? true;
+    if (firstRun) await _prefs.setBool('reminderEnabled', true);
     final savedTimes = _prefs.getStringList('reminderTimes');
     if (savedTimes != null) {
       reminderTimes = savedTimes;
@@ -680,6 +766,7 @@ class AppState extends ChangeNotifier {
       reminderTimes = [_fmtTime(h, m)];
     }
     if (reminderEnabled) {
+      if (firstRun) ReminderService.requestPermission().catchError((_) => false);
       ReminderService.sync(
         enabled: true,
         times: reminderTimes,
@@ -735,8 +822,73 @@ class AppState extends ChangeNotifier {
         TopicItem.fromJson(t as Map<String, dynamic>),
     ];
 
+    _unansweredNudges = _prefs.getInt('nudgeUnanswered') ?? 0;
+    _lastNudgeDay = _prefs.getString('lastNudgeDay');
+    _lastEarNudge = _prefs.getString('lastEarNudge');
+    ReminderService.planner = _planNudges;
+    if (isSignedIn) await _pullRemote();
     loading = false;
     notifyListeners();
+    addListener(_queuePush);
+  }
+
+  // ---- smart reminders (see core/reminder_plan.dart) ----
+  int _unansweredNudges = 0;
+  String? _lastNudgeDay;
+  String? _lastEarNudge;
+
+  /// Plans the next week's nudges from the current activity. Called when the app goes to the background.
+  Future<List<NudgeMessage>> _planNudges() async {
+    final today = todayStr();
+    // A nudge that passed without any study counts as unanswered.
+    if (_lastNudgeDay != null &&
+        _lastNudgeDay!.compareTo(today) < 0 &&
+        studyLog[_lastNudgeDay] != true) {
+      _unansweredNudges++;
+    }
+    _lastNudgeDay = null;
+    if (studyLog[today] == true) _unansweredNudges = 0;
+
+    final listenDates = [
+      for (final v in listening.values)
+        if (v is Map && v['date'] is String) v['date'] as String,
+    ];
+    final time = reminderTimes.isEmpty ? '21:00' : reminderTimes.first;
+    final parts = time.split(':');
+    final plan = planNudges(
+      NudgeInput(
+        now: DateTime.now(),
+        studyDays: {
+          for (final e in studyLog.entries)
+            if (e.value) e.key,
+        },
+        streak: streak,
+        missedCount: missed.length,
+        lastListenDate: listenDates.isEmpty
+            ? null
+            : listenDates.reduce((a, b) => a.compareTo(b) > 0 ? a : b),
+        lastEarNudge: _lastEarNudge,
+        unansweredInRow: _unansweredNudges,
+        studyHour: int.tryParse(parts[0]) ?? 21,
+        studyMinute: int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0,
+      ),
+    );
+    for (final n in plan) {
+      if (n.kind != NudgeKind.streak) {
+        _lastNudgeDay ??= fmtDate(n.at);
+      }
+      if (n.kind == NudgeKind.ear) _lastEarNudge = today;
+    }
+    await _prefs.setInt('nudgeUnanswered', _unansweredNudges);
+    if (_lastNudgeDay == null) {
+      await _prefs.remove('lastNudgeDay');
+    } else {
+      await _prefs.setString('lastNudgeDay', _lastNudgeDay!);
+    }
+    if (_lastEarNudge != null) {
+      await _prefs.setString('lastEarNudge', _lastEarNudge!);
+    }
+    return plan;
   }
 
   /// Pick up newer content from the CDN without blocking the UI.

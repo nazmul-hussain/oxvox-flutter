@@ -374,7 +374,7 @@ class _GrammarSheetState extends State<_GrammarSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
-                child: Container(
+                child: Ink(
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(

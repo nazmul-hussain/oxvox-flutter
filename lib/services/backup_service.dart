@@ -17,11 +17,12 @@ class BackupService {
   /// Web exportData: the full state as JSON (same keys as the web app).
   static Map<String, dynamic> buildBackup(AppState s) => {
     'currentDay': s.currentDay,
-    'bookmarks': {for (final k in s.bookmarks.keys) k: true},
+    'bookmarks': s.bookmarks,
     'srs': {for (final e in s.progress.entries) e.key: e.value.toJson()},
     'completedDays': {
       for (final e in s.completedDays.entries) '${e.key}': e.value,
     },
+    'activity': s.activity,
     'quizHistory': s.quizHistory,
     'missed': s.missed,
     'studyLog': s.studyLog,
@@ -34,7 +35,7 @@ class BackupService {
     'settings': {
       'levels': s.levels,
       'days': s.planDays,
-      'onboarded': true,
+      'onboarded': s.onboarded,
       'showSynonyms': s.showSynonyms,
       'includeTopics': s.includeTopics,
       'quizCount': 30,
@@ -140,6 +141,9 @@ class BackupService {
       'theme': theme,
       'showSynonyms': st['showSynonyms'] as bool? ?? true,
       'includeTopics': st['includeTopics'] as bool? ?? true,
+      'activity': d['activity'] == null
+          ? <String, Map<String, int>>{}
+          : AppState.activityOf(d['activity']),
     };
   }
 

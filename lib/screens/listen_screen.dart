@@ -194,7 +194,7 @@ class _DayBarState extends State<_DayBar> {
         borderRadius: BorderRadius.circular(12),
         child: Opacity(
           opacity: enabled ? 1 : 0.35,
-          child: Container(
+          child: Ink(
             width: 40,
             height: 40,
             decoration: BoxDecoration(

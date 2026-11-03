@@ -21,6 +21,13 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   String _view = 'today';
+  // Bumped on every navigation tap, so a page always opens from the top (even when tapping the current tab).
+  int _navTick = 0;
+
+  void _go(String v) => setState(() {
+    _view = v;
+    _navTick++;
+  });
   // Set when the study plan is saved from the level test, so the welcome modal closes.
   bool _welcomeHidden = false;
 
@@ -37,9 +44,9 @@ class _HomeShellState extends State<HomeShell> {
       'settings' => SettingsScreen(
         state: s,
         p: p,
-        onClose: () => setState(() => _view = 'words'),
+        onClose: () => _go('words'),
       ),
-      _ => TodayScreen(state: s, p: p, go: (v) => setState(() => _view = v)),
+      _ => TodayScreen(state: s, p: p, go: (v) => _go(v)),
     };
 
     return Scaffold(
@@ -53,8 +60,8 @@ class _HomeShellState extends State<HomeShell> {
                 _Header(
                   p: p,
                   onLogin: () => openAuth(context, s, p),
-                  onBrand: () => setState(() => _view = 'today'),
-                  onAvatar: () => setState(() => _view = 'settings'),
+                  onBrand: () => _go('today'),
+                  onAvatar: () => _go('settings'),
                   active: _view == 'settings',
                   name: s.accountName,
                 ),
@@ -65,7 +72,7 @@ class _HomeShellState extends State<HomeShell> {
                       constraints: const BoxConstraints(maxWidth: 680),
                       child: SingleChildScrollView(
                         // Keyed per screen so every navigation starts at the top.
-                        key: ValueKey(_view),
+                        key: ValueKey('$_view-$_navTick'),
                         padding: EdgeInsets.fromLTRB(
                           0,
                           _view == 'today' ? 0 : 8,
@@ -98,6 +105,7 @@ class _HomeShellState extends State<HomeShell> {
                 setState(() {
                   _welcomeHidden = true;
                   _view = 'settings';
+                  _navTick++;
                 });
                 s.setOnboarded();
               },
@@ -107,7 +115,7 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: _BottomNav(
         p: p,
         active: navActive,
-        onTap: (v) => setState(() => _view = v),
+        onTap: (v) => _go(v),
       ),
     );
   }

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>oxvox: Play Store upload guide</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 860px; margin: 32px auto; padding: 0 20px; color: #1f2937; line-height: 1.55; }
+  h1 { color: #0c4a6e; }
+  h2 { color: #0369a1; border-bottom: 2px solid #e0f2fe; padding-bottom: 4px; margin-top: 36px; }
+  code, pre { background: #f1f5f9; border-radius: 6px; padding: 2px 6px; }
+  pre { padding: 12px; overflow-x: auto; }
+  .box { background: #fff7ed; border-left: 4px solid #ea580c; padding: 10px 14px; border-radius: 6px; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  td, th { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #e0f2fe; }
+  input[type=checkbox] { transform: scale(1.2); margin-right: 8px; }
+  li.check { list-style: none; }
+</style>
+</head>
+<body>
+
+<h1>oxvox: Play Store upload and publish guide</h1>
+
+<div class="box"><strong>Do not publish until every OPEN item in <code>PLAY_UPLOAD_NOTES.md</code> is resolved.</strong> The Oxford word lists, the listening audio, and the short stories need a license or written permission.</div>
+
+<h2>1. Before you start</h2>
+<ul>
+  <li class="check"><input type="checkbox"> Google Play Console developer account ($25 one-time fee). Create it at <code>play.google.com/console</code>.</li>
+  <li class="check"><input type="checkbox"> Your identity verification and developer profile completed in Play Console.</li>
+  <li class="check"><input type="checkbox"> Backup of <code>android/upload-keystore.jks</code> and <code>android/key.properties</code>. Losing them means you can't update the app.</li>
+  <li class="check"><input type="checkbox"> Privacy policy live: <code>https://nazmul-hussain.github.io/oxvox-cdn/privacy.html</code></li>
+</ul>
+
+<h2>2. Build the release file</h2>
+<p>Bump the version in <code>pubspec.yaml</code> first (current <code>1.0.0+1</code> is fine for the first upload). Then run:</p>
+<pre>cd oxvox-flutter
+flutter clean
+flutter pub get
+flutter build appbundle --release</pre>
+<p>Upload this file: <code>build/app/outputs/bundle/release/app-release.aab</code></p>
+<p>Check it's signed with your upload key: if <code>android/key.properties</code> is missing, the build falls back to a debug key, and Play will reject it.</p>
+
+<h2>3. Create the app in Play Console</h2>
+<ol>
+  <li>Open <strong>All apps</strong> &rarr; <strong>Create app</strong>.</li>
+  <li>App name: <code>oxvox</code>. Default language. App or game: App. Free or paid: Free.</li>
+  <li>Accept the declarations (developer policies, US export laws).</li>
+</ol>
+
+<h2>4. Store listing (Grow &rarr; Store presence &rarr; Main store listing)</h2>
+<table>
+  <tr><th>Item</th><th>What to upload</th></tr>
+  <tr><td>App name</td><td>oxvox</td></tr>
+  <tr><td>Short description (max 80 characters)</td><td>Learn English words, quizzes, and listening daily.</td></tr>
+  <tr><td>Full description (max 4000 characters)</td><td>Describe the study plan, quizzes, word flashcards, listening lessons, and reminders. Don't claim content you don't have rights to.</td></tr>
+  <tr><td>App icon</td><td>512 x 512 PNG (already made)</td></tr>
+  <tr><td>Feature graphic</td><td>1024 x 500 PNG or JPG. <strong>Required, and not yet made.</strong></td></tr>
+  <tr><td>Phone screenshots</td><td>At least 2, 16:9 or 9:16, 320px to 3840px wide. <strong>Not yet made.</strong></td></tr>
+</table>
+
+<h2>5. Policy sections (left menu, under Policy)</h2>
+<ol>
+  <li><strong>App content &rarr; Privacy policy:</strong> paste the privacy policy URL above.</li>
+  <li><strong>App content &rarr; Ads:</strong> the app has no ads. Say <em>No</em> (confirm before submitting).</li>
+  <li><strong>App content &rarr; App access:</strong> the app works without login. Say <em>All functionality is available without special access</em>. Add a test account only if you choose to.</li>
+  <li><strong>App content &rarr; Content rating:</strong> complete the questionnaire. Educational app, no violence, no user-generated content.</li>
+  <li><strong>App content &rarr; Target audience:</strong> choose the age groups. Don't pick under-13 unless you meet the children's policy rules.</li>
+  <li><strong>App content &rarr; Data safety:</strong> declare account data (name, username/email/phone, password) and learning progress. Data is encrypted in transit. Users can delete their account in the app.</li>
+  <li><strong>App content &rarr; News apps / COVID / Government / Financial:</strong> answer <em>No</em> where it applies.</li>
+</ol>
+
+<h2>6. Closed testing (required for new personal developer accounts)</h2>
+<p>Accounts created after November 2023 must run a closed test with at least 12 testers opted in for 14 days before production access. Check the current requirement in Play Console when you start.</p>
+<ol>
+  <li>Open <strong>Testing &rarr; Closed testing</strong> &rarr; create a track.</li>
+  <li>Upload <code>app-release.aab</code>, add release notes, and roll out.</li>
+  <li>Add tester emails (a Google Group or list) and share the opt-in link.</li>
+  <li>Wait for the 14-day period, then apply for production access if Play Console asks.</li>
+</ol>
+
+<h2>7. Production release</h2>
+<ol>
+  <li>Open <strong>Production &rarr; Create new release</strong>.</li>
+  <li>Upload <code>app-release.aab</code>. Add release notes.</li>
+  <li>Review the warnings Play shows (fix any errors; warnings are usually OK).</li>
+  <li>Click <strong>Review release</strong> &rarr; <strong>Start rollout to production</strong>.</li>
+  <li>Review usually takes a few hours to a few days. Check your email and the Policy status page.</li>
+</ol>
+
+<h2>8. After publishing</h2>
+<ul>
+  <li>To update the app: bump <code>version:</code> in <code>pubspec.yaml</code> (the <code>+N</code> must increase), rebuild the <code>.aab</code>, and upload a new release.</li>
+  <li>Keep the keystore backed up.</li>
+</ul>
+
+<h2>9. Still open (from PLAY_UPLOAD_NOTES.md)</h2>
+<ul>
+  <li class="check"><input type="checkbox"> Oxford 3000 and 5000 word lists: commercial license or replacement.</li>
+  <li class="check"><input type="checkbox"> Listening audio from dailydictation: written permission or replacement.</li>
+  <li class="check"><input type="checkbox"> Short stories: author's written permission.</li>
+  <li class="check"><input type="checkbox"> Feature graphic (1024 x 500).</li>
+  <li class="check"><input type="checkbox"> At least 2 phone screenshots.</li>
+  <li class="check"><input type="checkbox"> Data safety form completed.</li>
+</ul>
+
+</body>
+</html>

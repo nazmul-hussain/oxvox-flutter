@@ -235,7 +235,7 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
     return InkWell(
       onTap: answered ? null : () => _choose(opt),
       borderRadius: BorderRadius.circular(12),
-      child: Container(
+      child: Ink(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(

@@ -26,8 +26,12 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with WidgetsBindingObserver {
   String _section = 'menu';
+  // Whether the device currently allows notifications (re-checked when the app comes back).
+  bool _notifAllowed = true;
+
   // Web: message under the Data card (backup downloaded / restored, progress reset).
   String? _message;
 
@@ -42,6 +46,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkNotifications();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   void _setMessage(String text) {
@@ -160,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
                 onTap: () => setState(() => _section = id),
-                child: Container(
+                child: Ink(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     border: Border.all(color: p.line),
@@ -192,7 +204,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             Text(
                               sub,
-                              style: TextStyle(color: p.muted, fontSize: OxType.caption),
+                              style: TextStyle(
+                                color: p.muted,
+                                fontSize: OxType.caption,
+                              ),
                             ),
                           ],
                         ),
@@ -310,6 +325,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: Text(_presetLabel(d)),
                       selected: s.planDays == d,
                       selectedColor: p.accent,
+                      checkmarkColor: p.accentInk,
                       labelStyle: TextStyle(
                         color: s.planDays == d ? p.accentInk : p.ink,
                         fontWeight: FontWeight.w400,
@@ -366,47 +382,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _levelChip(AppState s, Map<String, dynamic> l, bool on) {
     final p = widget.p;
     final id = l['id'] as String;
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () {
-        final next = [...s.levels];
-        if (on) {
-          next.remove(id);
-        } else {
-          next.add(id);
-        }
-        s.setLevels(next);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: on ? p.accentSoft : p.surface,
-          border: Border.all(
-            color: on ? p.accent : p.line,
-            width: on ? 1.5 : 1,
-          ),
-          borderRadius: BorderRadius.circular(999),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 120),
+      child: Material(
+        color: on ? p.accentSoft : p.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: on ? p.accent : p.line, width: on ? 2 : 1),
         ),
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: id,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: on ? p.accent : p.muted,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            final next = [...s.levels];
+            if (on) {
+              next.remove(id);
+            } else {
+              next.add(id);
+            }
+            s.setLevels(next);
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  id,
+                  style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),
                 ),
-              ),
-              TextSpan(
-                text: '  ${l['name'] as String}',
-                style: TextStyle(color: p.ink, fontSize: 12.8),
-              ),
-              if (s.placementSuggested == id)
-                TextSpan(
-                  text: '  · test',
-                  style: TextStyle(color: p.accent, fontSize: 11),
+                Text(
+                  l['name'] as String,
+                  style: TextStyle(color: p.ink, fontSize: 12.8),
                 ),
-            ],
+                if (s.placementSuggested == id)
+                  Text(
+                    'Level test',
+                    style: TextStyle(color: p.accent, fontSize: 12),
+                  ),
+                Text(
+                  '${_fmtNum(l['count'] as int)} words',
+                  style: TextStyle(color: p.muted, fontSize: 12.8),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -453,7 +471,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       style: TextStyle(color: p.ink, fontSize: OxType.body),
       decoration: InputDecoration(
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       ),
       items: [
@@ -531,6 +552,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: Text(label),
                       selected: s.themeSetting == id,
                       selectedColor: p.accent,
+                      checkmarkColor: p.accentInk,
                       labelStyle: TextStyle(
                         color: s.themeSetting == id ? p.accentInk : p.ink,
                         fontWeight: FontWeight.w400,
@@ -561,7 +583,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               Row(
                 children: [
-                  Text('A', style: TextStyle(color: p.muted, fontSize: OxType.caption)),
+                  Text(
+                    'A',
+                    style: TextStyle(color: p.muted, fontSize: OxType.caption),
+                  ),
                   Expanded(
                     child: Slider(
                       value: s.fontScale,
@@ -573,7 +598,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onChanged: (v) => s.setFontScale(v),
                     ),
                   ),
-                  Text('A', style: TextStyle(color: p.muted, fontSize: OxType.heading)),
+                  Text(
+                    'A',
+                    style: TextStyle(color: p.muted, fontSize: OxType.heading),
+                  ),
                 ],
               ),
               Container(
@@ -684,7 +712,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     Text(
                       'Study reminders',
-                      style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: p.ink,
+                      ),
                     ),
                     Text(
                       'Get a notification at each time to study.',
@@ -700,6 +731,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+          if (s.reminderEnabled && !_notifAllowed) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: p.noticeBg,
+                border: Border.all(color: p.noticeLine),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Notifications are off, so reminders will not show.',
+                      style: TextStyle(color: p.noticeInk, fontSize: 13),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _allowNotifications,
+                    child: const Text('Allow'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (s.reminderEnabled) ...[
             const SizedBox(height: 8),
             Text(
@@ -716,7 +772,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () => _editReminder(s, i),
-                        child: Container(
+                        child: Ink(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 14,
                             vertical: 10,
@@ -740,7 +796,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                 ),
                               ),
-                              Icon(Icons.edit_outlined, color: p.accent, size: 18),
+                              Icon(
+                                Icons.edit_outlined,
+                                color: p.accent,
+                                size: 18,
+                              ),
                             ],
                           ),
                         ),
@@ -772,16 +832,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // Returning from system settings: check again so the warning goes away.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkNotifications();
+  }
+
+  Future<void> _checkNotifications() async {
+    final ok = await ReminderService.notificationsAllowed();
+    if (mounted && ok != _notifAllowed) setState(() => _notifAllowed = ok);
+  }
+
   Future<void> _toggleReminders(bool on) async {
     final s = widget.state;
     if (on) {
       final granted = await ReminderService.requestPermission();
+      await _checkNotifications();
       if (!granted) {
-        _setMessage('Allow notifications in your device settings to get reminders.');
+        _setMessage(
+          'Notifications are off for oxvox. Tap Allow to turn them on in your phone settings.',
+        );
         return;
       }
     }
     await s.setReminderEnabled(on);
+  }
+
+  Future<void> _allowNotifications() async {
+    final granted = await ReminderService.requestPermission();
+    await _checkNotifications();
+    if (granted && !widget.state.reminderEnabled) {
+      await widget.state.setReminderEnabled(true);
+    }
   }
 
   Future<void> _editReminder(AppState s, int? index) async {

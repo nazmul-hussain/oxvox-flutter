@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Content download from the CDN (and nothing else; the app has no accounts). -->
+    <!-- Content download from the CDN, and the account and progress sync API (oxvox.netlify.app). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Daily study reminder (Android 13+ runtime permission). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
-        android:label="Oxford A1-C2"
+        android:label="OxVox A1-C2"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

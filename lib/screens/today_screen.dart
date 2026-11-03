@@ -375,7 +375,7 @@ class _LevelTestButton extends StatelessWidget {
               content: Text('Level test is coming in the next update.'),
             ),
           ),
-      child: Container(
+      child: Ink(
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(

@@ -121,7 +121,7 @@ class _WordsScreenState extends State<WordsScreen> {
               children: [
                 _ActionBtn(
                   p: p,
-                  icon: Icons.layers,
+                  icon: Icons.style_outlined,
                   label: 'Flashcards',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -137,7 +137,7 @@ class _WordsScreenState extends State<WordsScreen> {
                 const SizedBox(width: 8),
                 _ActionBtn(
                   p: p,
-                  icon: Icons.psychology,
+                  icon: Icons.quiz_outlined,
                   label: 'Quiz',
                   onTap: () => showDayQuizCountSheet(
                     context,
@@ -150,7 +150,7 @@ class _WordsScreenState extends State<WordsScreen> {
                 const SizedBox(width: 8),
                 _ActionBtn(
                   p: p,
-                  icon: Icons.check_circle_outline,
+                  icon: done ? Icons.check : Icons.task_alt_outlined,
                   label: done ? 'Done' : 'Mark done',
                   on: done,
                   onTap: () => s.toggleDayDone(day),
@@ -233,7 +233,7 @@ class _IconOnly extends StatelessWidget {
     child: InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: enabled ? onTap : null,
-      child: Container(
+      child: Ink(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
@@ -263,29 +263,41 @@ class _ActionBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-    child: InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          color: on ? p.accentSoft : p.surface,
-          border: Border.all(color: on ? p.accent : p.line),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 20, color: on ? p.accent : p.ink),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: on ? p.accent : p.ink,
+    child: Material(
+      color: on ? p.accentSoft : p.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: on ? p.accent : p.line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          child: Column(
+            children: [
+              // Icon badge in the theme accent: filled when the action is active (day done).
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: on ? p.accent : p.accentSoft,
+                ),
+                child: Icon(icon, size: 18, color: on ? p.accentInk : p.accent),
               ),
-            ),
-          ],
+              const SizedBox(height: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: on ? p.accent : p.ink,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     ),

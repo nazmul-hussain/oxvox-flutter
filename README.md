@@ -26,10 +26,11 @@ Android version of the oxvox English learning app. No backend server: content co
 - [x] Release signing with upload key, debug fallback blocked from uploads
 - [x] Only `INTERNET` and `POST_NOTIFICATIONS` permissions (no exact alarms, no location, no contacts)
 - [x] Privacy policy: https://nazmul-hussain.github.io/oxvox-cdn/privacy.html (enable GitHub Pages on oxvox-cdn, `main` branch, root folder)
-- [ ] Replace the default Flutter launcher icon (`android/app/src/main/res/mipmap-*`) with the oxvox icon, plus a 512x512 store icon
-- [ ] Replace `support@example.com` in the privacy policy with a real address
-- [ ] Fill in the Data safety form (answer: no data collected or shared; data stays on device)
+- [x] App icon and 512x512 store icon (done)
+- [x] Support email set to shadhinrcrg@gmail.com in `oxvox-cdn/privacy.html`
+- [ ] Fill in the Data safety form: account data (name, email/phone, password) and learning progress are collected, encrypted in transit, and deletable in-app
 - [ ] Add screenshots (phone, at least 2)
+- [ ] Confirm content rights for word lists and listening lessons
 - [ ] Install NDK (`flutter doctor`) to remove the "failed to strip debug symbols" advisory from the bundle
 
 ## Roadmap (suggested features, data already planned in SCHEMA.md)

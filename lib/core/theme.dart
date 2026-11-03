@@ -61,6 +61,11 @@ class OxPalette {
   });
 }
 
+extension OxPaletteX on OxPalette {
+  /// Solid action colour (buttons, play circle). Night stays black and white: brand is near-white.
+  Color get action => brand;
+}
+
 /// color-mix(in srgb, a w%, b)
 Color mix(Color a, Color b, double w) => Color.lerp(b, a, w)!;
 
@@ -200,6 +205,7 @@ const double kBaseTextScale = 1.12;
 const double kMinFontScale = 0.7;
 const double kMaxFontScale = 1.15;
 const double kFontScaleStep = 0.05;
+
 /// The standard size, shown as "Default".
 const double kDefaultFontScale = 0.9;
 

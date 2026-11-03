@@ -109,8 +109,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 24),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          minimumSize: const Size(0, 32),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         onPressed: () => openAuth(context, widget.state, p),
@@ -120,6 +123,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         ),
                       ),
                     ),
+                  if (!s.isSignedIn) const SizedBox(height: 10),
                   Flexible(
                     child: SingleChildScrollView(
                       child: Column(
@@ -253,7 +257,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: () => _toggleLevel(id),
-      child: Container(
+      child: Ink(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: on ? p.accentSoft : p.surface,

@@ -228,10 +228,17 @@ class _AccountPanelState extends State<AccountPanel> {
                 _editing = !_editing;
                 _statusText = '';
               }),
+              icon: _editing ? Icons.close : Icons.edit_outlined,
             ),
           ),
           const SizedBox(height: 10),
-          _fullWidth(_outlineButton('Log out', _busy ? null : _logOut)),
+          _fullWidth(
+            _outlineButton(
+              'Log out',
+              _busy ? null : _logOut,
+              icon: Icons.logout,
+            ),
+          ),
           if (_editing) ...[const SizedBox(height: 12), _editPanel()],
           if (_statusText.isNotEmpty)
             Padding(
@@ -313,6 +320,7 @@ class _AccountPanelState extends State<AccountPanel> {
       'Delete account',
       () => setState(() => _confirmDelete = true),
       danger: true,
+      icon: Icons.delete_outline,
     ),
   );
 
@@ -359,9 +367,20 @@ class _AccountPanelState extends State<AccountPanel> {
     VoidCallback? onPressed, {
     bool danger = false,
     bool filled = false,
+    IconData? icon,
   }) {
     final p = widget.p;
     final fg = danger ? p.red : p.accent;
+    final child = icon == null
+        ? Text(label)
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: 8),
+              Text(label),
+            ],
+          );
     final style = ButtonStyle(
       minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
       padding: const WidgetStatePropertyAll(
@@ -377,11 +396,7 @@ class _AccountPanelState extends State<AccountPanel> {
         TextStyle(fontWeight: FontWeight.w500, fontSize: 14.4),
       ),
     );
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: style,
-      child: Text(label),
-    );
+    return OutlinedButton(onPressed: onPressed, style: style, child: child);
   }
 
   Widget _field(

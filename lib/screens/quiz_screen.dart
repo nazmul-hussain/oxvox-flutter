@@ -695,7 +695,9 @@ class _QuizScreenState extends State<QuizScreen> {
       }
     }
     // Second language on options for bn2en and gap questions, not en2bn.
-    final second = q.dir != 'en2bn' ? s.secondaryForId(opt.toLowerCase()) : null;
+    final second = q.dir != 'en2bn'
+        ? s.secondaryForId(opt.toLowerCase())
+        : null;
     final optRtl = q.dir == 'en2bn' && s.primaryMeaningLang.rtl;
     return InkWell(
       onTap: locked ? null : () => _pick(opt),
