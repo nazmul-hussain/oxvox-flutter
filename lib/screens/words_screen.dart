@@ -201,7 +201,7 @@ class _WordsScreenState extends State<WordsScreen> {
                   w,
                   p,
                   lines: s.lineOf(w),
-                  exampleBn: s.exampleBn,
+                  exampleBn: s.exampleTranslations,
                   saved: s.bookmarks.containsKey(w.id),
                   onToggleSave: () => s.toggleBookmark(w.id),
                 ),

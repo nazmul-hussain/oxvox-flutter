@@ -765,6 +765,11 @@ class AppState extends ChangeNotifier {
   MeaningLang get primaryMeaningLang => langByCode(primaryLang)!;
   MeaningLang? get secondaryMeaningLang => langByCode(secondaryLang);
 
+  /// Example-sentence translations exist only in Bangla, so show them only when
+  /// Bangla is one of the chosen meaning languages.
+  Map<String, String> get exampleTranslations =>
+      (primaryLang == 'bn' || secondaryLang == 'bn') ? exampleBn : const {};
+
   Map<String, String>? _mapFor(String code) {
     if (code == 'bn') return null;
     if (code == 'ar') return arabic;
@@ -777,7 +782,9 @@ class AppState extends ChangeNotifier {
         continue;
       }
       if (langByCode(code) == null) continue;
-      _translations[code] = await repo.loadTranslations(code);
+      final map = await repo.loadTranslations(code);
+      // Keep failed (empty) loads out of the cache so the next try downloads again.
+      if (map.isNotEmpty) _translations[code] = map;
     }
   }
 

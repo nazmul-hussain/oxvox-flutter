@@ -164,7 +164,7 @@ class MissedScreen extends StatelessWidget {
       w,
       p,
       lines: state.lineOf(w),
-      exampleBn: state.exampleBn,
+      exampleBn: state.exampleTranslations,
       saved: state.bookmarks.containsKey(w.id),
       onToggleSave: () => state.toggleBookmark(w.id),
     );
@@ -294,7 +294,7 @@ class _SavedScreenState extends State<SavedScreen> {
                       w,
                       p,
                       lines: s.lineOf(w),
-                      exampleBn: s.exampleBn,
+                      exampleBn: s.exampleTranslations,
                       saved: true,
                       onToggleSave: () => s.toggleBookmark(w.id),
                     ),
