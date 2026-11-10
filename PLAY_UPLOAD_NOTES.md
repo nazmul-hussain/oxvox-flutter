@@ -16,7 +16,7 @@ Do not submit until every row marked **OPEN** is resolved.
 
 - App is free. No in-app purchases or ads (confirm before submitting).
 - Accounts: name, username/email/phone, password. Progress is stored on the account and can be deleted in the app.
-- Privacy policy: https://nazmul-hussain.github.io/oxvox-cdn/privacy.html
+- Privacy policy: https://oxvox.netlify.app/privacy.html
 - Support email: shadhinrcrg@gmail.com
 
 ## Before upload

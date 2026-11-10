@@ -25,9 +25,9 @@ Android version of the oxvox English learning app. No backend server: content co
 - [x] Package name `com.oxvox.app`, label `oxvox`
 - [x] Release signing with upload key, debug fallback blocked from uploads
 - [x] Only `INTERNET` and `POST_NOTIFICATIONS` permissions (no exact alarms, no location, no contacts)
-- [x] Privacy policy: https://nazmul-hussain.github.io/oxvox-cdn/privacy.html (enable GitHub Pages on oxvox-cdn, `main` branch, root folder)
+- [x] Privacy policy: https://oxvox.netlify.app/privacy.html (served by the web app: `oxford-app/frontend/public/privacy.html`)
 - [x] App icon and 512x512 store icon (done)
-- [x] Support email set to shadhinrcrg@gmail.com in `oxvox-cdn/privacy.html`
+- [x] Support email set to shadhinrcrg@gmail.com in `oxford-app/frontend/public/privacy.html`
 - [ ] Fill in the Data safety form: account data (name, email/phone, password) and learning progress are collected, encrypted in transit, and deletable in-app
 - [ ] Add screenshots (phone, at least 2)
 - [ ] Confirm content rights for word lists and listening lessons

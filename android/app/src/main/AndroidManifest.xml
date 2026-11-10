@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Voice answers in quizzes (speech recognition). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- RECORD_AUDIO makes Google Play assume a microphone is required, which hides the app
+         from devices without one. Voice answers are optional, so do not require it. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:label="OxVox A1-C2"
