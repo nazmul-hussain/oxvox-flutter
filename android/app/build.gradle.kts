@@ -53,6 +53,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Debug builds get their own app ID so they install next to the
+            // Play Store / release app instead of replacing it.
+            applicationIdSuffix = ".debug"
+        }
         release {
             signingConfig = if (keystoreProps.containsKey("storeFile")) {
                 signingConfigs.getByName("release")
@@ -80,5 +85,6 @@ flutter {
 }
 
 dependencies {
+    implementation("androidx.core:core-ktx:1.15.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

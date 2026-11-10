@@ -19,15 +19,19 @@ class NudgeMessage {
 
 class NudgeInput {
   final DateTime now;
+
   /// Days you studied, as yyyy-mm-dd.
   final Set<String> studyDays;
   final int streak;
   final int missedCount;
+
   /// Last day you listened to a conversation (yyyy-mm-dd), or null.
   final String? lastListenDate;
+
   /// Last day an ear-training reminder was planned (yyyy-mm-dd), or null.
   final String? lastEarNudge;
   final int unansweredInRow;
+
   /// Time of the first daily reminder from Settings; the streak reminder is 30 minutes before it.
   final int studyHour;
   final int studyMinute;
@@ -70,8 +74,11 @@ List<NudgeMessage> planNudges(NudgeInput i) {
       DateTime(today.year, today.month, today.day + dayOffset, h, m);
 
   // 1. Streak at risk: tonight only, 30 minutes before the daily reminder.
-  final streakTime = at(0, i.studyHour, i.studyMinute)
-      .subtract(const Duration(minutes: 30));
+  final streakTime = at(
+    0,
+    i.studyHour,
+    i.studyMinute,
+  ).subtract(const Duration(minutes: 30));
   if (!studiedToday && i.streak >= 2 && streakTime.isAfter(i.now)) {
     out.add(
       NudgeMessage(

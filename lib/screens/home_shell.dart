@@ -23,11 +23,20 @@ class _HomeShellState extends State<HomeShell> {
   String _view = 'today';
   // Bumped on every navigation tap, so a page always opens from the top (even when tapping the current tab).
   int _navTick = 0;
+  // Lets Settings ask about a changed study plan before we navigate away from it.
+  final _settingsKey = GlobalKey<SettingsScreenState>();
 
-  void _go(String v) => setState(() {
-    _view = v;
-    _navTick++;
-  });
+  Future<void> _go(String v) async {
+    if (_view == 'settings' && v != 'settings') {
+      await _settingsKey.currentState?.confirmPlanChange();
+      if (!mounted) return;
+    }
+    setState(() {
+      _view = v;
+      _navTick++;
+    });
+  }
+
   // Set when the study plan is saved from the level test, so the welcome modal closes.
   bool _welcomeHidden = false;
 
@@ -42,6 +51,7 @@ class _HomeShellState extends State<HomeShell> {
       'topics' => TopicsScreen(state: s, p: p),
       'listen' => ListenScreen(state: s, p: p),
       'settings' => SettingsScreen(
+        key: _settingsKey,
         state: s,
         p: p,
         onClose: () => _go('words'),

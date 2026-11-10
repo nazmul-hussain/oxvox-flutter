@@ -164,7 +164,7 @@ class MissedScreen extends StatelessWidget {
       w,
       p,
       lines: state.lineOf(w),
-      exampleBn: state.content?.exampleBn ?? const {},
+      exampleBn: state.exampleBn,
       saved: state.bookmarks.containsKey(w.id),
       onToggleSave: () => state.toggleBookmark(w.id),
     );
@@ -182,7 +182,7 @@ class SavedScreen extends StatefulWidget {
 }
 
 class _SavedScreenState extends State<SavedScreen> {
-  // null = default (30% of saved words); set once the user moves the slider.
+  // null = default (half of the saved words); set once the user moves the slider.
   int? _count;
 
   @override
@@ -294,7 +294,7 @@ class _SavedScreenState extends State<SavedScreen> {
                       w,
                       p,
                       lines: s.lineOf(w),
-                      exampleBn: s.content?.exampleBn ?? const {},
+                      exampleBn: s.exampleBn,
                       saved: true,
                       onToggleSave: () => s.toggleBookmark(w.id),
                     ),

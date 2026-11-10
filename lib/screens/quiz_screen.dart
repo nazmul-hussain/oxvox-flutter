@@ -12,6 +12,7 @@ import 'auth_screen.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../models/word.dart';
+import '../services/voice_answer.dart';
 
 /// Web: components/CountPicker.js (slider plus number box).
 class CountPicker extends StatelessWidget {
@@ -185,6 +186,26 @@ class _QuizSetupCardState extends State<QuizSetupCard> {
             max: n,
             onChanged: (v) => setState(() => _count = v),
           ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: widget.state.voiceAnswers,
+            activeThumbColor: p.accent,
+            secondary: Icon(Icons.mic, color: p.accent),
+            title: Text('Answer by voice', style: TextStyle(color: p.ink)),
+            subtitle: Text(
+              'Say the answer instead of tapping it',
+              style: TextStyle(color: p.muted, fontSize: 12.8),
+            ),
+            onChanged: (v) async {
+              if (v && !await VoiceAnswer.init()) return;
+              await widget.state.setVoiceAnswers(v);
+              if (mounted) setState(() {});
+              if (v && context.mounted) {
+                await checkVoiceLanguages(context, widget.state, p);
+              }
+            },
+          ),
           Row(
             children: [
               FilledButton(
@@ -225,6 +246,106 @@ class _QuizSetupCardState extends State<QuizSetupCard> {
         ],
       ),
     );
+  }
+}
+
+/// Run when voice answers are turned on: checks that the phone can recognise
+/// English and the learner's meaning language, and offers to download any that
+/// are missing. Voice stays on either way; questions in a missing language just
+/// will not be heard until it is installed.
+Future<void> checkVoiceLanguages(
+  BuildContext context,
+  AppState s,
+  OxPalette p,
+) async {
+  final langs = <(String, String)>[
+    ('en', 'English'),
+    if (s.primaryMeaningLang.code != 'en')
+      (s.primaryMeaningLang.code, s.primaryMeaningLang.name),
+  ];
+  final toDownload = <(String, String)>[];
+  final onlineOnly = <String>[];
+  final missing = <String>[];
+  final downloading = <String>[];
+  for (final (code, name) in langs) {
+    switch (await SpeechLangs.status(code)) {
+      case SpeechLangStatus.downloadable:
+        toDownload.add((code, name));
+      case SpeechLangStatus.onlineOnly:
+        onlineOnly.add(name);
+      case SpeechLangStatus.missing:
+        missing.add(name);
+      case SpeechLangStatus.downloading:
+        downloading.add(name);
+      case SpeechLangStatus.ready:
+      case SpeechLangStatus.unknown:
+        break;
+    }
+  }
+  if (toDownload.isEmpty && missing.isEmpty && onlineOnly.isEmpty) {
+    if (downloading.isNotEmpty && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${downloading.join(' and ')} speech is downloading.'),
+        ),
+      );
+    }
+    return;
+  }
+  if (!context.mounted) return;
+  final lines = <String>[
+    if (toDownload.isNotEmpty)
+      '${toDownload.map((l) => l.$2).join(' and ')} speech is not downloaded on this phone. Download it so voice answers work, even offline.',
+    if (onlineOnly.isNotEmpty)
+      '${onlineOnly.join(' and ')} speech works only with internet on this phone.',
+    if (missing.isNotEmpty)
+      "This phone's speech service doesn't support ${missing.join(' and ')}. In voice input settings, choose Speech Recognition and Synthesis from Google, then add the language.",
+    if (downloading.isNotEmpty)
+      '${downloading.join(' and ')} speech is already downloading.',
+  ];
+  final choice = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: p.surface,
+      title: Text('Voice languages', style: TextStyle(color: p.ink)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final l in lines)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(l, style: TextStyle(color: p.ink)),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text('Not now', style: TextStyle(color: p.muted)),
+        ),
+        if (missing.isNotEmpty)
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'settings'),
+            child: Text('Open settings', style: TextStyle(color: p.accent)),
+          ),
+        if (toDownload.isNotEmpty)
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'download'),
+            style: FilledButton.styleFrom(backgroundColor: p.brand),
+            child: const Text('Download'),
+          ),
+      ],
+    ),
+  );
+  if (choice == 'settings') {
+    await SpeechLangs.openSettings();
+  } else if (choice == 'download') {
+    var failed = false;
+    for (final (code, _) in toDownload) {
+      if (!await SpeechLangs.download(code)) failed = true;
+    }
+    if (failed) await SpeechLangs.openSettings();
   }
 }
 
@@ -391,7 +512,7 @@ class QuizScreen extends StatefulWidget {
   State<QuizScreen> createState() => _QuizScreenState();
 }
 
-class _QuizScreenState extends State<QuizScreen> {
+class _QuizScreenState extends State<QuizScreen> with WidgetsBindingObserver {
   late final List<QuizQuestion> _questions = buildQuizQuestions(
     widget.pool,
     widget.count,
@@ -405,6 +526,13 @@ class _QuizScreenState extends State<QuizScreen> {
   bool _reviewing = false;
   bool _saved = false;
   Timer? _timer;
+
+  // Voice answers.
+  bool _listening = false;
+  String _heard = '';
+  final _level = ValueNotifier<double>(0);
+  String? _voiceMsg;
+  int _listenToken = 0;
 
   OxPalette get p => widget.p;
   AppState get s => widget.state;
@@ -422,10 +550,174 @@ class _QuizScreenState extends State<QuizScreen> {
       _answers[i] != null &&
       _answers[i] != _questions[i].answer;
 
+  /// True while the app is in the background or another app (a phone or
+  /// WhatsApp call) holds the audio. The mic stays off until both clear.
+  bool _backgrounded = false;
+  bool _interrupted = false;
+  bool get _suspended => _backgrounded || _interrupted;
+  Timer? _callWatch;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _watchInterruptions();
+    if (s.voiceAnswers) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _listen());
+    }
+  }
+
+  /// Checks Android's call state every second: ringing, a phone call, or a
+  /// WhatsApp/other internet call. The mic is released while any is active.
+  void _watchInterruptions() {
+    _callWatch = Timer.periodic(const Duration(seconds: 1), (_) async {
+      if (!s.voiceAnswers) return;
+      final inCall = await SpeechLangs.inCall();
+      if (inCall != _interrupted) {
+        _interrupted = inCall;
+        _onSuspendChanged();
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // inactive covers the call screen sliding over the app; paused/hidden is background.
+    _backgrounded = state != AppLifecycleState.resumed;
+    _onSuspendChanged();
+  }
+
+  void _onSuspendChanged() {
+    if (!mounted) return;
+    if (_suspended) {
+      _stopListening();
+    } else {
+      _listen();
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _callWatch?.cancel();
+    _level.dispose();
     _timer?.cancel();
+    VoiceAnswer.stop();
     super.dispose();
+  }
+
+  bool get _canAnswer =>
+      !_reviewing &&
+      !_finished &&
+      _index == _frontier &&
+      !(_answers.length > _index && _answers[_index] != null);
+
+  /// Language the answer is spoken in: the meaning language for en2bn, else English.
+  String get _answerLang =>
+      _questions[_index].dir == 'en2bn' ? s.primaryMeaningLang.code : 'en';
+
+  /// Hands-free loop: listens until an option matches, restarting the recognizer
+  /// whenever Android stops it, for as long as voice is on and the question is open.
+  Future<void> _listen() async {
+    if (!mounted || !s.voiceAnswers || !_canAnswer || _listening) return;
+    if (_suspended) {
+      setState(
+        () => _voiceMsg = _interrupted
+            ? 'Paused during a call. Listening resumes when it ends.'
+            : null,
+      );
+      return;
+    }
+    if (!await VoiceAnswer.init()) {
+      if (mounted) {
+        setState(
+          () => _voiceMsg = 'Speech recognition is not available. Allow the microphone for OxVox and install "Speech Recognition and Synthesis from Google".',
+        );
+      }
+      return;
+    }
+    if (!mounted || _listening) return;
+    final token = ++_listenToken;
+    final q = _questions[_index];
+    setState(() {
+      _listening = true;
+      _heard = '';
+      _voiceMsg = null;
+    });
+    bool still() =>
+        mounted &&
+        token == _listenToken &&
+        !_suspended &&
+        s.voiceAnswers &&
+        _canAnswer &&
+        _questions[_index] == q;
+    try {
+      while (still()) {
+        final started = DateTime.now();
+        final r = await VoiceAnswer.listen(
+          _answerLang,
+          match: (g) => matchSpokenOption(g, q.options),
+          onPartial: (t) {
+            if (mounted && token == _listenToken) setState(() => _heard = t);
+          },
+          onLevel: (l) {
+            if (token == _listenToken) _level.value = l;
+          },
+        );
+        if (!still()) break;
+        if (r.option != null) {
+          setState(() => _listening = false);
+          _pick(r.option!);
+          return;
+        }
+        if (r.heard.isNotEmpty) {
+          setState(() {
+            _heard = '';
+            _voiceMsg = 'Heard "${r.heard}". No option matched. Say it again.';
+          });
+        }
+        // Back off when the recognizer ended at once (busy/error) so it can recover.
+        final quick = DateTime.now().difference(started).inMilliseconds < 1500;
+        await Future.delayed(Duration(milliseconds: quick ? 1000 : 250));
+      }
+    } finally {
+      // Never leave _listening stuck true, or the next question never listens.
+      if (mounted && token == _listenToken && _listening) {
+        setState(() => _listening = false);
+      }
+    }
+  }
+
+  void _stopListening() {
+    _level.value = 0;
+    _listenToken++;
+    VoiceAnswer.stop();
+    if (_listening) setState(() => _listening = false);
+  }
+
+  Future<void> _toggleVoice() async {
+    final on = !s.voiceAnswers;
+    if (on && !await VoiceAnswer.init()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Voice answers need the microphone and a speech recognizer on this phone.',
+          ),
+        ),
+      );
+      return;
+    }
+    await s.setVoiceAnswers(on);
+    if (!mounted) return;
+    if (on) await checkVoiceLanguages(context, s, p);
+    if (!mounted) return;
+    setState(() => _voiceMsg = null);
+    if (on) {
+      _listen();
+    } else {
+      _stopListening();
+    }
   }
 
   void _pick(String option) {
@@ -433,7 +725,10 @@ class _QuizScreenState extends State<QuizScreen> {
     if (_answers.length > _index && _answers[_index] != null) return;
     final q = _questions[_index];
     final correct = option == q.answer;
+    _stopListening();
     setState(() {
+      _heard = '';
+      _voiceMsg = null;
       while (_answers.length <= _index) {
         _answers.add(null);
       }
@@ -462,6 +757,7 @@ class _QuizScreenState extends State<QuizScreen> {
         _frontier += 1;
         _index += 1;
       });
+      _listen();
     }
   }
 
@@ -526,6 +822,49 @@ class _QuizScreenState extends State<QuizScreen> {
           widget.title,
           style: TextStyle(color: p.ink, fontWeight: FontWeight.w500),
         ),
+        actions: [
+          if (!_finished)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Material(
+                color: s.voiceAnswers ? p.accentSoft : Colors.transparent,
+                shape: StadiumBorder(
+                  side: BorderSide(color: s.voiceAnswers ? p.accent : p.line),
+                ),
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: _toggleVoice,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          s.voiceAnswers
+                              ? Icons.mic_rounded
+                              : Icons.mic_off_rounded,
+                          size: 18,
+                          color: s.voiceAnswers ? p.accent : p.muted,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Voice answer',
+                          style: TextStyle(
+                            fontSize: 13.6,
+                            fontWeight: FontWeight.w500,
+                            color: s.voiceAnswers ? p.accent : p.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -624,6 +963,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _option(opt, q, chosen, locked, bn2en),
                 ),
+              if (s.voiceAnswers && !locked) _voicePanel(),
               if (answered)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -639,7 +979,12 @@ class _QuizScreenState extends State<QuizScreen> {
         Row(
           children: [
             OutlinedButton(
-              onPressed: _index <= 0 ? null : () => setState(() => _index -= 1),
+              onPressed: _index <= 0
+                  ? null
+                  : () {
+                      _stopListening();
+                      setState(() => _index -= 1);
+                    },
               style: _ghost(),
               child: const Text('Back'),
             ),
@@ -649,7 +994,10 @@ class _QuizScreenState extends State<QuizScreen> {
                   ? (_index >= n - 1 ? null : () => setState(() => _index += 1))
                   : (_index >= _frontier
                         ? null
-                        : () => setState(() => _index += 1)),
+                        : () {
+                            setState(() => _index += 1);
+                            if (_index == _frontier) _listen();
+                          }),
               style: _ghost(),
               child: const Text('Next'),
             ),
@@ -664,6 +1012,106 @@ class _QuizScreenState extends State<QuizScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _voicePanel() {
+    final live = _listening;
+    final heard = live && _heard.isNotEmpty;
+    final status = live
+        ? (heard ? '\u201c$_heard\u201d' : 'Listening\u2026')
+        : (_voiceMsg ?? 'Tap the mic to answer by voice');
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.fromLTRB(10, 10, 16, 12),
+      decoration: BoxDecoration(
+        color: live ? p.accentSoft : p.surface2,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: live ? p.accent : p.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              _micOrb(live),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: Text(
+                        status,
+                        key: ValueKey(status),
+                        style: TextStyle(
+                          fontSize: heard ? 17 : 14,
+                          height: 1.35,
+                          color: heard ? p.ink : p.muted,
+                          fontWeight: heard ? FontWeight.w500 : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    if (live && !heard)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'Say the answer, or its number 1\u20134',
+                          style: TextStyle(fontSize: 12.5, color: p.muted),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Round mic button with a halo that swells with the voice level.
+  Widget _micOrb(bool live) {
+    return SizedBox(
+      width: 60,
+      height: 60,
+      child: ValueListenableBuilder<double>(
+        valueListenable: _level,
+        builder: (_, l, child) => Stack(
+          alignment: Alignment.center,
+          children: [
+            if (live)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: 48 + 12 * l,
+                height: 48 + 12 * l,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: p.accent.withValues(alpha: 0.18 + 0.2 * l),
+                ),
+              ),
+            child!,
+          ],
+        ),
+        child: Material(
+          color: live ? p.accent : p.surface,
+          shape: CircleBorder(side: BorderSide(color: p.accent)),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: live ? _stopListening : _listen,
+            child: SizedBox(
+              width: 46,
+              height: 46,
+              child: Icon(
+                live ? Icons.mic_rounded : Icons.mic_none_rounded,
+                color: live ? p.surface : p.accent,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -927,67 +1375,133 @@ class _QuizScreenState extends State<QuizScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          for (final i in wrong)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: p.surface,
-                border: Border.all(color: p.line),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.end,
-                    spacing: 8,
-                    children: [
-                      Text(
-                        _questions[i].word.word,
-                        style: TextStyle(
-                          fontSize: 17.6,
-                          fontWeight: FontWeight.w500,
-                          color: p.ink,
-                        ),
-                      ),
-                      Text(
-                        s.meaningOf(_questions[i].word),
-                        style: TextStyle(fontSize: 15.2, color: p.muted),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      _pill('Your answer: ${_answers[i]}', p.redSoft, p.red),
-                      _pill(
-                        'Correct: ${_questions[i].answer}',
-                        p.greenSoft,
-                        p.green,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+          for (final i in wrong) _reviewItem(i),
         ],
       ],
     );
   }
 
-  Widget _pill(String text, Color bg, Color fg) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      color: bg,
-      borderRadius: BorderRadius.circular(999),
-    ),
-    child: Text(
-      text,
-      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: fg),
-    ),
-  );
+  /// Web quiz-review-item: the whole question again, with every option shown and
+  /// marked, so the learner sees what was asked and not just the two words.
+  Widget _reviewItem(int i) {
+    final q = _questions[i];
+    final ask = q.dir == 'gap'
+        ? 'Choose the word that fits the gap'
+        : q.dir == 'bn2en'
+        ? 'Choose the English word for'
+        : 'Choose the ${s.primaryMeaningLang.name} meaning of';
+    final promptRtl = q.dir == 'bn2en' && s.primaryMeaningLang.rtl;
+    final optionRtl = q.dir == 'en2bn' && s.primaryMeaningLang.rtl;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border(
+          top: BorderSide(color: p.line),
+          right: BorderSide(color: p.line),
+          bottom: BorderSide(color: p.line),
+          left: BorderSide(color: p.red, width: 4),
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Question ${i + 1} · $ask',
+            style: TextStyle(fontSize: OxType.small, color: p.muted),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            q.prompt,
+            textDirection: promptRtl ? TextDirection.rtl : null,
+            style: TextStyle(
+              fontSize: OxType.subtitle,
+              fontWeight: FontWeight.w600,
+              height: 1.5,
+              color: p.ink,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final opt in q.options)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: _reviewOption(q, opt, _answers[i], optionRtl),
+            ),
+          const SizedBox(height: 4),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.end,
+            spacing: 8,
+            children: [
+              Text(
+                q.word.word,
+                style: TextStyle(
+                  fontSize: 17.6,
+                  fontWeight: FontWeight.w500,
+                  color: p.ink,
+                ),
+              ),
+              Text(
+                s.meaningOf(q.word),
+                textDirection: s.primaryMeaningLang.rtl
+                    ? TextDirection.rtl
+                    : null,
+                style: TextStyle(fontSize: 15.2, color: p.muted),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One option row in the review list: the right one is green, the picked one red.
+  Widget _reviewOption(QuizQuestion q, String opt, String? picked, bool rtl) {
+    final right = opt == q.answer;
+    final chosen = opt == picked;
+    final bg = right
+        ? p.greenSoft
+        : chosen
+        ? p.redSoft
+        : p.surface2;
+    final fg = right
+        ? p.green
+        : chosen
+        ? p.red
+        : p.muted;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              opt,
+              textDirection: rtl ? TextDirection.rtl : null,
+              style: TextStyle(
+                fontSize: OxType.small,
+                fontWeight: FontWeight.w500,
+                color: fg,
+              ),
+            ),
+          ),
+          if (right || chosen)
+            Text(
+              right ? '✓ Correct' : '✗ Your answer',
+              style: TextStyle(
+                fontSize: OxType.caption,
+                fontWeight: FontWeight.w500,
+                color: fg,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

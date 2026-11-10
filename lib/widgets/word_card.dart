@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../core/languages.dart';
 import '../models/word.dart';
+import '../services/speech.dart';
+import '../services/voice_answer.dart';
 import '../services/pronunciation.dart';
 
 /// Short part-of-speech tags, same map as the web WordCard.
@@ -75,17 +77,80 @@ class _WordTitle extends StatefulWidget {
 
 class _WordTitleState extends State<_WordTitle> {
   bool _speaking = false;
+  bool _meaningPlaying = false;
+
+  Future<void> _toggleMeaning(String code, String text) async {
+    if (_meaningPlaying) {
+      await Speech.stop();
+      if (mounted) setState(() => _meaningPlaying = false);
+      return;
+    }
+    final tag = VoiceAnswer.tagFor(code);
+    final status = await Speech.langStatus(tag);
+    if (!mounted) return;
+    if (status != TtsLangStatus.ready) {
+      await _askForVoice(code, status);
+      return;
+    }
+    setState(() {
+      _speaking = false;
+      _meaningPlaying = true;
+    });
+    await Speech.speakLang(
+      text,
+      tag,
+      onEnd: () {
+        if (mounted) setState(() => _meaningPlaying = false);
+      },
+    );
+  }
+
+  /// The phone has no voice for [code] yet: ask the learner to download one.
+  Future<void> _askForVoice(String code, TtsLangStatus status) async {
+    final p = widget.p;
+    final name = langByCode(code)?.name ?? code;
+    final missing = status == TtsLangStatus.missing;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.surface,
+        title: Text('$name voice', style: TextStyle(color: p.ink)),
+        content: Text(
+          missing
+              ? "This phone's speech engine has no $name voice. Open the voice settings, choose Speech Services by Google as the engine, then download $name."
+              : 'The $name voice is not downloaded on this phone. Download it to hear meanings read aloud, even offline.',
+          style: TextStyle(color: p.ink),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Not now', style: TextStyle(color: p.muted)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: p.brand),
+            child: Text(missing ? 'Open settings' : 'Download'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await SpeechLangs.installTtsVoice();
+  }
 
   Future<void> _toggleSpeak() async {
+    _meaningPlaying = false;
     if (_speaking) {
       await Pronunciation.stop();
       if (mounted) setState(() => _speaking = false);
       return;
     }
     setState(() => _speaking = true);
-    await Pronunciation.speak(widget.w.word, onEnd: () {
-      if (mounted) setState(() => _speaking = false);
-    });
+    await Pronunciation.speak(
+      widget.w.word,
+      onEnd: () {
+        if (mounted) setState(() => _speaking = false);
+      },
+    );
   }
 
   @override
@@ -157,6 +222,31 @@ class _WordTitleState extends State<_WordTitle> {
                 color: p.accent,
                 fontSize: 22.2,
                 fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        if (lines.secondary != null && lines.secondaryLang != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Tooltip(
+              message: _meaningPlaying ? 'Stop' : 'Listen to meaning',
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () =>
+                    _toggleMeaning(lines.secondaryLang!, lines.secondary!),
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: p.accentSoft,
+                  ),
+                  child: Icon(
+                    _meaningPlaying ? Icons.stop : Icons.volume_up,
+                    size: 17,
+                    color: p.accent,
+                  ),
+                ),
               ),
             ),
           ),

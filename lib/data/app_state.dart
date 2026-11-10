@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/plan.dart';
@@ -14,6 +13,7 @@ import '../core/srs.dart';
 import '../core/theme.dart';
 import '../services/api_client.dart';
 import '../services/backup_service.dart';
+import '../models/lab.dart';
 import '../models/topic.dart';
 import '../models/word.dart';
 import 'content_repository.dart';
@@ -24,9 +24,28 @@ class AppState extends ChangeNotifier {
   final ContentRepository repo;
   late SharedPreferences _prefs;
 
-  ContentBundle? content;
-  List<ListeningLesson> get lessons => content?.lessons ?? const [];
-  List<Word> get words => content?.allWords ?? const [];
+  // Content (from the CDN copy or the bundled assets, see ContentRepository).
+  List<ListeningLesson> lessons = const [];
+  Map<String, String> arabic = const {};
+  List<Word> get words => _wordIndex.values.toList();
+
+  // Bangla translations of example sentences (1.5 MB): loaded the first time a word card asks.
+  Map<String, String>? _exampleBn;
+  Future<void>? _exampleBnLoading;
+  Map<String, String> get exampleBn {
+    if (_exampleBn == null) {
+      _exampleBnLoading ??= repo
+          .load('exampleBn', parseStringMap)
+          .then((m) {
+            _exampleBn = m;
+            notifyListeners();
+          })
+          .catchError((_) {
+            _exampleBnLoading = null;
+          });
+    }
+    return _exampleBn ?? const {};
+  }
 
   // users / settings
   String themeSetting = 'afternoon';
@@ -54,6 +73,18 @@ class AppState extends ChangeNotifier {
   ListeningQuestions questions = const ListeningQuestions({});
   List<TopicItem> topics = const [];
 
+  /// Learning journey (tracks of lessons), from labs.json.
+  Journey? journey;
+
+  /// Lab modules already opened, by content key (e.g. "tenses", "lab_articles").
+  final Map<String, Lab> labs = {};
+
+  /// Best lab score by `key:unit` (unit can also be mastery, advanced, speed).
+  final Map<String, int> labBest = {};
+
+  /// Day (yyyy-mm-dd) the Daily 5 challenge was last finished.
+  String? dailyDoneOn;
+
   // Quiz: history (web quizHistory), missed words (web missed).
   List<Map<String, dynamic>> quizHistory = [];
   Map<String, dynamic> missed = {};
@@ -65,6 +96,9 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> levelOptions = const [];
   List<String> levels = List.of(defaultLevels);
   bool includeTopics = true;
+
+  /// Quizzes listen for spoken answers (mic opens on each question).
+  bool voiceAnswers = false;
   int planDays = defaultPlanDays;
   Map<int, List<Word>> _days = {};
   final Map<String, int> _planDayOf = {};
@@ -72,42 +106,55 @@ class AppState extends ChangeNotifier {
 
   static const planPresets = [7, 30, 60, 90, 180, 365];
 
+  /// Plan index (6,000+ words and the ordered lists), parsed on a background isolate.
   Future<void> _loadPlanIndex() async {
-    final raw = jsonDecode(
-      await rootBundle.loadString('assets/data/plan_index.json'),
-    ) as Map<String, dynamic>;
-    for (final w in raw['words'] as List) {
-      final word = Word.fromJson(w as Map<String, dynamic>);
-      _wordIndex[word.id] = word;
-    }
-    levelOptions = [
-      for (final l in raw['levels'] as List)
-        Map<String, dynamic>.from(l as Map),
-    ];
-    for (final e in (raw['orders'] as Map<String, dynamic>).entries) {
-      final v = e.value as Map<String, dynamic>;
-      _orders[e.key] = {
-        't': List<String>.from(v['t'] as List),
-        'n': List<String>.from(v['n'] as List),
-      };
-    }
+    final idx = await repo.load('planIndex', parsePlanIndex);
+    _wordIndex
+      ..clear()
+      ..addAll(idx.words);
+    levelOptions = idx.levels;
+    _orders
+      ..clear()
+      ..addAll(idx.orders);
+    _buildDays();
+  }
+
+  void _loadPlanPrefs() {
     placementUsed = _prefs.getStringList('placementUsed') ?? [];
     final pl = _prefs.getString('placementLast');
-    placementLast = pl == null ? null : jsonDecode(pl) as Map<String, dynamic>;
+    try {
+      placementLast = pl == null ? null : jsonDecode(pl) as Map<String, dynamic>;
+    } catch (_) {
+      placementLast = null;
+    }
     placementSuggested = _prefs.getString('placementSuggested');
     levels = pickLevels(_prefs.getStringList('levels') ?? defaultLevels);
     includeTopics = _prefs.getBool('includeTopics') ?? true;
+    try {
+      final tb = _prefs.getString('labBest');
+      if (tb != null) {
+        (jsonDecode(tb) as Map<String, dynamic>).forEach(
+          (k, v) => labBest[k] = (v as num).toInt(),
+        );
+      }
+    } catch (_) {}
+    dailyDoneOn = _prefs.getString('dailyDoneOn');
+    voiceAnswers = _prefs.getBool('voiceAnswers') ?? false;
     planDays = _prefs.getInt('planDays') ?? defaultPlanDays;
-    _buildDays();
   }
+
+  /// Words for the plan, in order. A few entries in the content have no meaning yet;
+  /// like the level test does, the plan skips them instead of showing blank cards
+  /// and quiz options.
+  List<Word> _teachable(List<String> order) => [
+    for (final id in order)
+      if (_wordIndex[id] case final w? when w.meaning.isNotEmpty) w,
+  ];
 
   void _buildDays() {
     final key = pickLevels(levels).join(',');
     final order = _orders[key]?[includeTopics ? 't' : 'n'] ?? const <String>[];
-    planWords = [
-      for (final id in order)
-        if (_wordIndex[id] != null) _wordIndex[id]!,
-    ];
+    planWords = _teachable(order);
     _days = buildPlanDays(
       planWords,
       planDays.clamp(minPlanDays, maxPlanDays).toInt(),
@@ -146,6 +193,12 @@ class AppState extends ChangeNotifier {
     currentDay = currentDay.clamp(1, totalDays);
     await _prefs.setStringList('levels', levels);
     await _prefs.setInt('currentDay', currentDay);
+    notifyListeners();
+  }
+
+  Future<void> setVoiceAnswers(bool on) async {
+    voiceAnswers = on;
+    await _prefs.setBool('voiceAnswers', on);
     notifyListeners();
   }
 
@@ -341,10 +394,21 @@ class AppState extends ChangeNotifier {
     return {
       for (final e in v.entries)
         e.key as String: {
-          for (final x in (e.value as Map).entries) x.key as String: (x.value as num).toInt(),
+          for (final x in (e.value as Map).entries)
+            x.key as String: (x.value as num).toInt(),
         },
     };
   }
+
+  /// True while this device has changes the account has not received yet. Kept on disk,
+  /// so a failed upload (offline, bad signal) is remembered after the app is closed.
+  bool get _syncDirty => _prefs.getBool('syncDirty') ?? false;
+
+  /// True when this device holds study progress of its own (a guest, or not yet uploaded).
+  bool get hasLocalProgress =>
+      progress.isNotEmpty ||
+      completedDays.isNotEmpty ||
+      studyLog.values.any((v) => v);
 
   /// Uploads this device's data to the account.
   Future<void> _pushNow() async {
@@ -354,6 +418,22 @@ class AppState extends ChangeNotifier {
       'data',
       body: {'data': BackupService.buildBackup(this)},
     );
+    await _prefs.setBool('syncDirty', false);
+  }
+
+  /// Tries to upload any unsent changes now. True when nothing is left unsent.
+  /// False when changes could not be uploaded (offline, or the account data has not
+  /// been loaded yet, so uploading could overwrite newer data).
+  Future<bool> flushPending() async {
+    _pushTimer?.cancel();
+    if (!isSignedIn || !_syncDirty) return true;
+    if (!_remoteReady) return false;
+    try {
+      await _pushNow().timeout(const Duration(seconds: 10));
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Loads the account data from the server and replaces local data.
@@ -364,7 +444,12 @@ class AppState extends ChangeNotifier {
     try {
       final res = await api.request('GET', 'data');
       final raw = res['data'];
-      if (raw is Map<String, dynamic>) {
+      if (_syncDirty && hasLocalProgress) {
+        // This device has newer changes that never reached the account (for example
+        // studied offline). Keep them and upload them, instead of replacing them with
+        // the older copy from the server.
+        await _pushNow();
+      } else if (raw is Map<String, dynamic> && raw.isNotEmpty) {
         _applyingRemote = true;
         try {
           final parsed = BackupService.parseBackup(raw);
@@ -372,6 +457,7 @@ class AppState extends ChangeNotifier {
         } finally {
           _applyingRemote = false;
         }
+        await _prefs.setBool('syncDirty', false);
       } else {
         await _pushNow();
       }
@@ -390,7 +476,11 @@ class AppState extends ChangeNotifier {
   }
 
   void _queuePush() {
-    if (!_remoteReady || _applyingRemote || !isSignedIn) return;
+    if (_applyingRemote || !isSignedIn) return;
+    // Remember that there is something to upload, even before the first download
+    // from the account has finished or if the upload below fails.
+    _prefs.setBool('syncDirty', true);
+    if (!_remoteReady) return;
     _pushTimer?.cancel();
     _pushTimer = Timer(const Duration(milliseconds: 600), () {
       _pushNow().catchError((_) {});
@@ -399,8 +489,7 @@ class AppState extends ChangeNotifier {
 
   /// On start: ask the server who is signed in. Offline, fall back to the last known account.
   Future<void> _restoreSession() async {
-    final cached = _prefs.getString('accountUser');
-    if (cached != null) _user = jsonDecode(cached) as Map<String, dynamic>;
+    _user = _cachedUser() ?? _user;
     if (!api.hasSession) {
       await _setUser(null);
       return;
@@ -456,7 +545,11 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> logOut() async {
+  /// Signs out and clears this device. Unsent changes are uploaded first. If they cannot
+  /// be uploaded, nothing happens and this returns false, unless [force] is true
+  /// (the caller asked the user first). Returns true once signed out.
+  Future<bool> logOut({bool force = false}) async {
+    if (!force && !await flushPending()) return false;
     _pushTimer?.cancel();
     _remoteReady = false;
     try {
@@ -468,6 +561,8 @@ class AppState extends ChangeNotifier {
     await _setUser(null);
     // Like the web app: the next person on this device starts clean. The account data stays on the server.
     await resetProgress();
+    await _prefs.setBool('syncDirty', false);
+    return true;
   }
 
   /// Account > Save profile (web Account.js saveProfile).
@@ -531,10 +626,7 @@ class AppState extends ChangeNotifier {
   String previewPerDayText(List<String> levels, int days) {
     final key = pickLevels(levels).join(',');
     final order = _orders[key]?['t'] ?? const <String>[];
-    final list = [
-      for (final id in order)
-        if (_wordIndex[id] != null) _wordIndex[id]!,
-    ];
+    final list = _teachable(order);
     return perDayLabel(
       buildPlanDays(list, days.clamp(minPlanDays, maxPlanDays).toInt()),
     );
@@ -605,6 +697,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Web Settings: after a plan change, "days done" and the current day start
+  /// again from Day 1. Learned words, quiz history and saved words are kept.
+  Future<void> resetPlanProgress() async {
+    completedDays.clear();
+    currentDay = 1;
+    await _prefs.setString('completedDays', jsonEncode(<String, bool>{}));
+    await _prefs.setInt('currentDay', 1);
+    notifyListeners();
+  }
+
   Future<void> resetProgress() async {
     // Web reset: the whole state goes back to defaults except settings, so level test state is cleared too.
     placementUsed = [];
@@ -648,8 +750,7 @@ class AppState extends ChangeNotifier {
 
   AppState(this.repo);
 
-  int get totalDays =>
-      _days.isNotEmpty ? _days.length : (content?.totalDays ?? 0);
+  int get totalDays => _days.length;
   bool showSynonyms = true; // web default settings.showSynonyms
 
   // ---- meaning languages ----
@@ -666,7 +767,7 @@ class AppState extends ChangeNotifier {
 
   Map<String, String>? _mapFor(String code) {
     if (code == 'bn') return null;
-    if (code == 'ar') return content?.arabic ?? const {};
+    if (code == 'ar') return arabic;
     return _translations[code] ?? const {};
   }
 
@@ -710,6 +811,7 @@ class AppState extends ChangeNotifier {
     primaryRtl: primaryMeaningLang.rtl,
     secondary: secondaryOf(w),
     secondaryRtl: secondaryMeaningLang?.rtl ?? false,
+    secondaryLang: secondaryOf(w) == null ? null : secondaryLang,
   );
 
   Future<void> setPrimaryLang(String code) async {
@@ -730,10 +832,41 @@ class AppState extends ChangeNotifier {
 
   List<Word> dayWords(int day) => _days[day] ?? const [];
 
+  /// Reads one saved JSON value from preferences and hands it to [use]. A missing,
+  /// damaged or old-format value is ignored (that part starts empty).
+  void _readSaved<T>(String key, void Function(T value) use, {String empty = '{}'}) {
+    try {
+      use(jsonDecode(_prefs.getString(key) ?? empty) as T);
+    } catch (e) {
+      debugPrint('Ignored unreadable saved "$key": $e');
+    }
+  }
+
+  void _skipBad(void Function() read) {
+    try {
+      read();
+    } catch (_) {
+      // Skip just this entry.
+    }
+  }
+
+  /// The signed-in user saved on this device, or null if missing or unreadable.
+  Map<String, dynamic>? _cachedUser() {
+    try {
+      final raw = _prefs.getString('accountUser');
+      return raw == null ? null : jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
-    content = await repo.load();
-    _refreshInBackground();
+    await repo.prepare();
+    // Read local content in parallel; the large files parse off the UI thread.
+    // Nothing here waits for the network, so the splash screen closes fast even offline.
+    _loadPlanPrefs();
+    final contentLoad = Future.wait([_loadPlanIndex(), _loadSmallContent()]);
 
     themeSetting = _prefs.getString('theme') ?? 'afternoon';
     // One-time switch: older installs saved 'auto' (blue by day). Move them to the orange default once.
@@ -742,15 +875,15 @@ class AppState extends ChangeNotifier {
       await _prefs.setString('theme', themeSetting);
       await _prefs.setBool('themeOrangeDefault', true);
     }
-    fontScale = snapFontScale(_prefs.getDouble('fontScale') ?? kDefaultFontScale);
+    fontScale = snapFontScale(
+      _prefs.getDouble('fontScale') ?? kDefaultFontScale,
+    );
     dailyGoal = _prefs.getInt('dailyGoal') ?? 10;
     displayName = _prefs.getString('displayName');
     onboarded = _prefs.getBool('onboarded') ?? false;
-    primaryLang =
-        _prefs.getString('primaryLang') ?? deviceDefaultPrimaryLang();
+    primaryLang = _prefs.getString('primaryLang') ?? deviceDefaultPrimaryLang();
     secondaryLang = _prefs.getString('secondaryLang') ?? defaultSecondaryLang;
-    await _loadLangMaps();
-    await _restoreSession();
+    if (api.hasSession) _user = _cachedUser() ?? _user;
     currentDay = _prefs.getInt('currentDay') ?? 1;
     // Default: a daily reminder at 9pm for new installs.
     final firstRun = !_prefs.containsKey('reminderEnabled');
@@ -766,70 +899,98 @@ class AppState extends ChangeNotifier {
       reminderTimes = [_fmtTime(h, m)];
     }
     if (reminderEnabled) {
-      if (firstRun) ReminderService.requestPermission().catchError((_) => false);
+      if (firstRun) {
+        ReminderService.requestPermission().catchError((_) => false);
+      }
       ReminderService.sync(
         enabled: true,
         times: reminderTimes,
       ).catchError((_) {});
     }
 
-    progress.addAll(
-      (jsonDecode(_prefs.getString('progress') ?? '{}') as Map<String, dynamic>)
-          .map(
-            (k, v) => MapEntry(k, SrsCard.fromJson(v as Map<String, dynamic>)),
+    // Saved progress is read value by value. A damaged or old-format entry is skipped,
+    // so one bad value can never stop the app from opening.
+    _readSaved<Map<String, dynamic>>(
+      'progress',
+      (m) => m.forEach((k, v) {
+        _skipBad(() => progress[k] = SrsCard.fromJson(v as Map<String, dynamic>));
+      }),
+    );
+    _readSaved<Map<String, dynamic>>(
+      'activity',
+      (m) => m.forEach((k, v) {
+        _skipBad(
+          () => activity[k] = (v as Map<String, dynamic>).map(
+            (x, y) => MapEntry(x, y as int),
           ),
+        );
+      }),
     );
-    activity.addAll(
-      (jsonDecode(_prefs.getString('activity') ?? '{}') as Map<String, dynamic>)
-          .map(
-            (k, v) => MapEntry(
-              k,
-              (v as Map<String, dynamic>).map((x, y) => MapEntry(x, y as int)),
-            ),
-          ),
+    _readSaved<Map<String, dynamic>>(
+      'completedDays',
+      (m) => m.forEach((k, v) {
+        _skipBad(() => completedDays[int.parse(k)] = v as bool);
+      }),
     );
-    completedDays.addAll(
-      (jsonDecode(_prefs.getString('completedDays') ?? '{}')
-              as Map<String, dynamic>)
-          .map((k, v) => MapEntry(int.parse(k), v as bool)),
+    _readSaved<Map<String, dynamic>>(
+      'studyLog',
+      (m) => m.forEach((k, v) {
+        _skipBad(() => studyLog[k] = v as bool);
+      }),
     );
-    studyLog.addAll(
-      (jsonDecode(_prefs.getString('studyLog') ?? '{}') as Map<String, dynamic>)
-          .map((k, v) => MapEntry(k, v as bool)),
+    _readSaved<Map<String, dynamic>>(
+      'bookmarks',
+      (m) => m.forEach((k, v) {
+        _skipBad(() => bookmarks[k] = v as Map<String, dynamic>);
+      }),
     );
-    bookmarks.addAll(
-      (jsonDecode(_prefs.getString('bookmarks') ?? '{}')
-              as Map<String, dynamic>)
-          .map((k, v) => MapEntry(k, v as Map<String, dynamic>)),
+    _readSaved<Map<String, dynamic>>('listening', (m) => listening = m);
+    _readSaved<List<dynamic>>(
+      'quizHistory',
+      (l) => quizHistory = [
+        for (final h in l)
+          if (h is Map) Map<String, dynamic>.from(h),
+      ],
+      empty: '[]',
     );
-
-    listening = (jsonDecode(
-      _prefs.getString('listening') ?? '{}',
-    ) as Map<String, dynamic>);
-    questions = await ListeningQuestions.load();
-    await _loadPlanIndex();
-    quizHistory = [
-      for (final h
-          in (jsonDecode(_prefs.getString('quizHistory') ?? '[]') as List))
-        Map<String, dynamic>.from(h as Map),
-    ];
-    missed =
-        jsonDecode(_prefs.getString('missed') ?? '{}') as Map<String, dynamic>;
-    topics = [
-      for (final t in (jsonDecode(
-        await rootBundle.loadString('assets/data/topics.json'),
-      ) as List))
-        TopicItem.fromJson(t as Map<String, dynamic>),
-    ];
+    _readSaved<Map<String, dynamic>>('missed', (m) => missed = m);
 
     _unansweredNudges = _prefs.getInt('nudgeUnanswered') ?? 0;
     _lastNudgeDay = _prefs.getString('lastNudgeDay');
     _lastEarNudge = _prefs.getString('lastEarNudge');
     ReminderService.planner = _planNudges;
-    if (isSignedIn) await _pullRemote();
+    await contentLoad;
+    currentDay = currentDay.clamp(1, totalDays).toInt();
     loading = false;
     notifyListeners();
     addListener(_queuePush);
+
+    // After the first screen is up: meaning languages, account check and sync, CDN updates.
+    _loadLangMaps().then((_) => notifyListeners()).catchError((_) {});
+    _restoreSession()
+        .then((_) async {
+          if (isSignedIn) await _pullRemote();
+        })
+        .catchError((_) {});
+    _refreshInBackground();
+  }
+
+  /// Lessons, listening questions, topics and Arabic meanings (small files).
+  Future<void> _loadSmallContent() async {
+    final r = await Future.wait([
+      repo.load('listeningLessons', parseLessons),
+      repo.load('listeningQuestions', parseQuestions),
+      repo.load('topics', parseTopics),
+      repo.load('arabic', parseStringMap),
+      repo
+          .load('labs', parseJourney)
+          .then<Journey?>((t) => t, onError: (_) => null),
+    ]);
+    lessons = r[0] as List<ListeningLesson>;
+    questions = r[1] as ListeningQuestions;
+    topics = r[2] as List<TopicItem>;
+    arabic = r[3] as Map<String, String>;
+    journey = r[4] as Journey?;
   }
 
   // ---- smart reminders (see core/reminder_plan.dart) ----
@@ -892,13 +1053,99 @@ class AppState extends ChangeNotifier {
   }
 
   /// Pick up newer content from the CDN without blocking the UI.
+  /// Downloads only the files that changed on the CDN, then reloads just those.
   void _refreshInBackground() {
-    repo.refreshFromCdn().then((updated) async {
-      if (!updated) return;
-      content = await repo.load();
-      notifyListeners();
-    });
+    repo
+        .refreshFromCdn()
+        .then((updated) async {
+          if (updated.isEmpty) return;
+          if (updated.contains('planIndex')) {
+            await _loadPlanIndex();
+            currentDay = currentDay.clamp(1, totalDays).toInt();
+          }
+          if (updated.any((k) => isLabKey(k) || k == 'tenses')) labs.clear();
+          if (updated.any(_smallKeys.contains)) await _loadSmallContent();
+          if (updated.contains('exampleBn') && _exampleBn != null) {
+            _exampleBn = await repo.load('exampleBn', parseStringMap);
+          }
+          if (updated.any((k) => k.startsWith('meanings/'))) {
+            _translations.clear();
+            await _loadLangMaps();
+          }
+          notifyListeners();
+        })
+        .catchError((_) {});
   }
+
+  static const _smallKeys = {
+    'listeningLessons',
+    'listeningQuestions',
+    'topics',
+    'arabic',
+    'labs',
+  };
+
+  /// Opens a lab module (downloaded copy, else bundled). Null when it cannot be read.
+  Future<Lab?> loadLab(String key) async {
+    if (labs[key] != null) return labs[key];
+    try {
+      return labs[key] = await repo.load(key, parseLab);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  int labScore(String key, String unit) => labBest['$key:$unit'] ?? -1;
+
+  /// Stars for a percent score: 1 from 60%, 2 from 80%, 3 from 95%.
+  static int starsFor(int pct) => pct >= 95
+      ? 3
+      : pct >= 80
+      ? 2
+      : pct >= 60
+      ? 1
+      : 0;
+
+  /// Stars for a whole lab: average of its units' stars, rounded down.
+  int labStars(String key, Lab lab) {
+    if (lab.units.isEmpty) return 0;
+    var sum = 0;
+    for (final u in lab.units) {
+      sum += starsFor(labScore(key, u.id));
+    }
+    return sum ~/ lab.units.length;
+  }
+
+  /// Saves a lab score if it is the best one, and adds the XP to today (counts as a study day).
+  Future<void> saveLabResult(String key, String unit, int score, int xp) async {
+    final id = '$key:$unit';
+    if (score > (labBest[id] ?? -1)) {
+      labBest[id] = score;
+      await _prefs.setString('labBest', jsonEncode(labBest));
+    }
+    if (xp > 0) {
+      final day = activity.putIfAbsent(
+        today,
+        () => {'words': 0, 'lessons': 0, 'xp': 0},
+      );
+      day['xp'] = (day['xp'] ?? 0) + xp;
+      studyLog[todayStr()] = true;
+      await _prefs.setString('studyLog', jsonEncode(studyLog));
+      await _saveProgress();
+    } else {
+      notifyListeners();
+    }
+  }
+
+  bool get dailyDoneToday => dailyDoneOn == todayStr();
+
+  Future<void> markDailyDone() async {
+    dailyDoneOn = todayStr();
+    await _prefs.setString('dailyDoneOn', dailyDoneOn!);
+    notifyListeners();
+  }
+
+  int get xpToday => activity[today]?['xp'] ?? 0;
 
   // ---- settings ----
   Future<void> setTheme(String v) async {
@@ -1075,3 +1322,57 @@ class AppState extends ChangeNotifier {
     return n;
   }
 }
+
+// ---- content parsers (top-level so they can run on a background isolate) ----
+
+typedef PlanIndex = ({
+  Map<String, Word> words,
+  List<Map<String, dynamic>> levels,
+  Map<String, Map<String, List<String>>> orders,
+});
+
+PlanIndex parsePlanIndex(Object? json) {
+  final raw = json as Map<String, dynamic>;
+  final words = <String, Word>{};
+  for (final w in raw['words'] as List) {
+    final word = Word.fromJson(w as Map<String, dynamic>);
+    words[word.id] = word;
+  }
+  return (
+    words: words,
+    levels: [
+      for (final l in raw['levels'] as List)
+        Map<String, dynamic>.from(l as Map),
+    ],
+    orders: {
+      for (final e in (raw['orders'] as Map<String, dynamic>).entries)
+        e.key: {
+          't': List<String>.from((e.value as Map)['t'] as List),
+          'n': List<String>.from((e.value as Map)['n'] as List),
+        },
+    },
+  );
+}
+
+Map<String, String> parseStringMap(Object? json) =>
+    (json as Map<String, dynamic>).map((k, v) => MapEntry(k, v as String));
+
+List<ListeningLesson> parseLessons(Object? json) => [
+  for (final e in json as List)
+    ListeningLesson.fromJson(e as Map<String, dynamic>),
+];
+
+ListeningQuestions parseQuestions(Object? json) => ListeningQuestions(
+  (json as Map<String, dynamic>).map(
+    (k, v) => MapEntry(k, (v as List).cast<Map<String, dynamic>>()),
+  ),
+);
+
+List<TopicItem> parseTopics(Object? json) => [
+  for (final t in json as List) TopicItem.fromJson(t as Map<String, dynamic>),
+];
+
+Lab parseLab(Object? json) => Lab.fromJson(json as Map<String, dynamic>);
+
+Journey parseJourney(Object? json) =>
+    Journey.fromJson(json as Map<String, dynamic>);

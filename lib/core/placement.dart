@@ -55,10 +55,8 @@ List<PlacementQuestion> buildPlacement(
           .take(3);
       final options = _shuffled([w, ...distractors])
           .map(
-            (o) => PlacementOption(
-              o.id,
-              dir == 'bn-en' ? o.word : meaningOf(o),
-            ),
+            (o) =>
+                PlacementOption(o.id, dir == 'bn-en' ? o.word : meaningOf(o)),
           )
           .toList();
       questions.add(

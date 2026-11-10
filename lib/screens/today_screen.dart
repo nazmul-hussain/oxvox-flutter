@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../core/listening.dart';
 import '../core/srs.dart';
 import '../core/theme.dart';
@@ -144,7 +145,10 @@ class _TodayScreenState extends State<TodayScreen> {
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             'Quizzes taken today: ${s.quizHistory.where((h) => h['date'] == todayStr()).length}',
-                            style: TextStyle(color: p.muted, fontSize: OxType.small),
+                            style: TextStyle(
+                              color: p.muted,
+                              fontSize: OxType.small,
+                            ),
                           ),
                         ),
                       if (studyNext == null)
@@ -152,7 +156,10 @@ class _TodayScreenState extends State<TodayScreen> {
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             'Every day is studied. Nice work.',
-                            style: TextStyle(color: p.muted, fontSize: OxType.small),
+                            style: TextStyle(
+                              color: p.muted,
+                              fontSize: OxType.small,
+                            ),
                           ),
                         ),
                     ],
@@ -203,7 +210,10 @@ class _TodayScreenState extends State<TodayScreen> {
                       const SizedBox(height: 6),
                       Text(
                         s.quizHistory.isEmpty ? 'No quizzes taken yet.' : '',
-                        style: TextStyle(color: p.muted, fontSize: OxType.small),
+                        style: TextStyle(
+                          color: p.muted,
+                          fontSize: OxType.small,
+                        ),
                       ),
                       if (s.quizHistory.isNotEmpty)
                         _ScoreChart(p: p, history: s.quizHistory),

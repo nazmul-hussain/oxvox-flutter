@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 import '../data/app_state.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/web_ui.dart';
 
 /// Web: components/Auth.js. Log in or sign up with a username, email or phone.
@@ -49,12 +50,25 @@ class _AuthScreenState extends State<AuthScreen> {
       setState(() => _error = native);
       return;
     }
+    final s = widget.state;
+    // Logging in loads the account's saved progress onto this device, replacing whatever
+    // is here. Say so first when this device has progress of its own.
+    if (!_register && s.hasLocalProgress) {
+      final go = await confirmAction(
+        context,
+        message:
+            'This device has progress that is not in an account. If your '
+            "account already has saved progress, logging in replaces this device's "
+            'progress with it.',
+        confirmLabel: 'Log in',
+      );
+      if (!go || !mounted) return;
+    }
     _inFlight = true;
     setState(() {
       _error = null;
       _busy = true;
     });
-    final s = widget.state;
     try {
       final err = _register
           ? await s.signUp(

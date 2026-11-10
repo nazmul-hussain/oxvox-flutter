@@ -1,7 +1,4 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 
 import '../models/word.dart';
 
@@ -15,16 +12,6 @@ final int listenDays = listenDaySizes.length;
 class ListeningQuestions {
   final Map<String, List<Map<String, dynamic>>> byLesson;
   const ListeningQuestions(this.byLesson);
-
-  static Future<ListeningQuestions> load() async {
-    final raw = await rootBundle.loadString(
-      'assets/data/listening_questions.json',
-    );
-    final map = jsonDecode(raw) as Map<String, dynamic>;
-    return ListeningQuestions(
-      map.map((k, v) => MapEntry(k, (v as List).cast<Map<String, dynamic>>())),
-    );
-  }
 }
 
 class QuizOption {

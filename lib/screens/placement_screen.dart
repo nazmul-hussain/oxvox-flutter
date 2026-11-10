@@ -6,6 +6,7 @@ import '../core/placement.dart';
 import '../core/plan.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
+import '../widgets/quiz_kit.dart';
 
 /// Web components/PlacementTest.js: 40 questions across A1–C2. Retakes use new words.
 class PlacementScreen extends StatefulWidget {
@@ -39,14 +40,39 @@ class _PlacementScreenState extends State<PlacementScreen> {
   List<PlacementQuestion> _build() =>
       buildPlacement(s.placementPools(), s.placementUsed, s.meaningOf);
 
+  late final QuizVoice _voice = QuizVoice(
+    s: s,
+    options: () => _finished || _questions.isEmpty
+        ? const []
+        : [for (final o in _questions[_index].options) o.label],
+    lang: () =>
+        _questions[_index].dir == 'bn-en' ? 'en' : s.primaryMeaningLang.code,
+    canAnswer: () => !_finished && _picked == null && _questions.isNotEmpty,
+    onPick: (label) {
+      for (final o in _questions[_index].options) {
+        if (o.label == label) return _choose(o.wid);
+      }
+    },
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (s.voiceAnswers) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _voice.listen());
+    }
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
+    _voice.dispose();
     super.dispose();
   }
 
   void _choose(String wid) {
     if (_picked != null || _finished) return;
+    _voice.stop();
     setState(() => _picked = wid);
     _timer = Timer(const Duration(milliseconds: 450), _advance);
   }
@@ -64,6 +90,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       if (mounted) setState(() => _finished = true);
     } else {
       setState(() => _index += 1);
+      _voice.listen();
     }
   }
 
@@ -75,6 +102,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       _picked = null;
       _finished = false;
     });
+    _voice.listen();
   }
 
   String _levelName(String c) {
@@ -92,6 +120,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
         backgroundColor: p.bg,
         foregroundColor: p.ink,
         title: const Text('Level test'),
+        actions: [if (!_finished) VoiceToggleChip(voice: _voice, p: p)],
       ),
       body: ListenableBuilder(
         listenable: s,
@@ -117,11 +146,14 @@ class _PlacementScreenState extends State<PlacementScreen> {
           style: TextStyle(color: p.muted, fontSize: 13.6),
         ),
         const SizedBox(height: 6),
-        LinearProgressIndicator(
-          value: _index / _questions.length,
-          minHeight: 6,
-          color: p.accent,
-          backgroundColor: p.surface2,
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: _index / _questions.length,
+            minHeight: 6,
+            color: p.accent,
+            backgroundColor: p.surface2,
+          ),
         ),
         const SizedBox(height: 12),
         Container(
@@ -138,14 +170,14 @@ class _PlacementScreenState extends State<PlacementScreen> {
                 bn
                     ? 'Choose the English word'
                     : 'Choose the ${s.primaryMeaningLang.name} meaning',
-                style: TextStyle(color: p.muted, fontSize: 12.8),
+                style: TextStyle(color: p.muted, fontSize: 13.6),
               ),
               const SizedBox(height: 6),
               Text(
                 q.prompt,
                 style: TextStyle(
-                  color: p.ink,
-                  fontSize: 22,
+                  color: bn ? p.ink : p.accent,
+                  fontSize: bn ? 22 : 28,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -155,6 +187,8 @@ class _PlacementScreenState extends State<PlacementScreen> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _option(o, q),
                 ),
+              if (s.voiceAnswers && _picked == null)
+                VoicePanel(voice: _voice, p: p),
             ],
           ),
         ),
@@ -164,36 +198,12 @@ class _PlacementScreenState extends State<PlacementScreen> {
 
   Widget _option(PlacementOption o, PlacementQuestion q) {
     final answered = _picked != null;
-    final correct = o.wid == q.wid;
-    Color border = p.line;
-    Color bg = p.surface;
-    if (answered && correct) {
-      border = p.green;
-      bg = p.greenSoft;
-    } else if (answered && o.wid == _picked) {
-      border = p.red;
-      bg = p.redSoft;
-    }
-    return InkWell(
+    return QuizOptionTile(
+      p: p,
+      label: o.label,
+      state: QuizOptionTile.stateFor(o.wid, q.wid, _picked),
+      rtl: q.dir != 'bn-en' && s.primaryMeaningLang.rtl,
       onTap: answered ? null : () => _choose(o.wid),
-      borderRadius: BorderRadius.circular(12),
-      child: Ink(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: bg,
-          border: Border.all(color: border),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          o.label,
-          style: TextStyle(
-            color: p.ink,
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ),
     );
   }
 

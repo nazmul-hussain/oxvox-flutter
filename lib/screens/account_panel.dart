@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 import '../data/app_state.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/web_ui.dart';
 import 'auth_screen.dart';
 
@@ -128,7 +129,24 @@ class _AccountPanelState extends State<AccountPanel> {
   }
 
   Future<void> _logOut() async {
-    await widget.state.logOut();
+    setState(() => _busy = true);
+    try {
+      // Unsent progress is uploaded first. If that is not possible, ask before
+      // signing out, because signing out clears this device.
+      if (!await widget.state.logOut() && mounted) {
+        final force = await confirmAction(
+          context,
+          message:
+              'Your latest progress could not be saved to your account '
+              '(no connection?). If you log out now, it will be lost.',
+          confirmLabel: 'Log out anyway',
+          cancelLabel: 'Stay signed in',
+        );
+        if (force) await widget.state.logOut(force: true);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override

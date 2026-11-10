@@ -3,17 +3,21 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
+import '../data/app_state.dart';
+import '../widgets/quiz_kit.dart';
 import '../models/topic.dart';
 import '../services/speech.dart';
 
 /// Web: components/ContextQuiz.js. Each question is a real situation; the learner picks the
 /// word that fits, then reads why it fits and why the tempting options do not.
 class ContextQuizScreen extends StatefulWidget {
+  final AppState state;
   final OxPalette p;
   final String title;
   final List<ContextQuestion> questions;
   const ContextQuizScreen({
     super.key,
+    required this.state,
     required this.p,
     required this.title,
     required this.questions,
@@ -33,8 +37,19 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
 
   bool _speaking = false;
 
+  late final QuizVoice _voice = QuizVoice(
+    s: widget.state,
+    options: () => _index < _total ? _items[_index].options : const [],
+    lang: () => 'en',
+    canAnswer: () =>
+        _index < _total &&
+        !(_index < _answers.length && _answers[_index] != null),
+    onPick: _choose,
+  );
+
   @override
   void dispose() {
+    _voice.dispose();
     Speech.stop();
     super.dispose();
   }
@@ -58,6 +73,9 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
   void initState() {
     super.initState();
     _shuffle();
+    if (widget.state.voiceAnswers) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _voice.listen());
+    }
   }
 
   // Web: shuffled once on mount; the question and option order stay until the screen closes.
@@ -95,6 +113,7 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
         backgroundColor: p.bg,
         foregroundColor: p.ink,
         title: Text(widget.title),
+        actions: [if (_index < _total) VoiceToggleChip(voice: _voice, p: p)],
       ),
       body: SafeArea(child: _index >= _total ? _result() : _question()),
     );
@@ -142,7 +161,7 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
               OutlinedButton.icon(
                 onPressed: () => _listen(q),
                 icon: Icon(
-                  _speaking ? Icons.stop : Icons.mic,
+                  _speaking ? Icons.stop : Icons.volume_up_rounded,
                   size: 16,
                   color: p.accent,
                 ),
@@ -181,6 +200,8 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _option(opt, q, chosen),
                 ),
+              if (widget.state.voiceAnswers && !answered)
+                VoicePanel(voice: _voice, p: p),
               if (answered) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -211,7 +232,12 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
             ),
             const Spacer(),
             FilledButton(
-              onPressed: !answered ? null : () => setState(() => _index += 1),
+              onPressed: !answered
+                  ? null
+                  : () {
+                      setState(() => _index += 1);
+                      _voice.listen();
+                    },
               style: FilledButton.styleFrom(backgroundColor: p.brand),
               child: Text(_index + 1 == _total ? 'See result' : 'Next'),
             ),
@@ -223,39 +249,20 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
 
   Widget _option(String opt, ContextQuestion q, String? chosen) {
     final answered = chosen != null;
-    Color border = p.line;
-    Color bg = p.surface;
-    if (answered && opt == q.answer) {
-      border = p.green;
-      bg = p.greenSoft;
-    } else if (answered && opt == chosen) {
-      border = p.red;
-      bg = p.redSoft;
-    }
-    return InkWell(
+    return QuizOptionTile(
+      p: p,
+      label: opt,
+      state: QuizOptionTile.stateFor(opt, q.answer, chosen),
       onTap: answered ? null : () => _choose(opt),
-      borderRadius: BorderRadius.circular(12),
-      child: Ink(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: bg,
-          border: Border.all(color: border),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          opt,
-          style: TextStyle(
-            color: p.ink,
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ),
     );
   }
 
   void _choose(String opt) {
+    if (_index >= _total ||
+        (_index < _answers.length && _answers[_index] != null)) {
+      return;
+    }
+    _voice.stop();
     setState(() {
       while (_answers.length <= _index) {
         _answers.add(null);
@@ -311,10 +318,13 @@ class _ContextQuizScreenState extends State<ContextQuizScreen> {
           children: [
             OutlinedButton(
               // Web restart keeps the same question order and clears answers.
-              onPressed: () => setState(() {
-                _answers.clear();
-                _index = 0;
-              }),
+              onPressed: () {
+                setState(() {
+                  _answers.clear();
+                  _index = 0;
+                });
+                _voice.listen();
+              },
               style: OutlinedButton.styleFrom(
                 foregroundColor: p.accent,
                 side: BorderSide(color: p.accent),

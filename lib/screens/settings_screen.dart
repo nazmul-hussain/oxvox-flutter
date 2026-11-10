@@ -5,7 +5,10 @@ import '../core/plan.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../services/backup_service.dart';
+import '../services/speech.dart';
+import '../services/voice_answer.dart';
 import '../services/reminder_service.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/join_groups_bar.dart';
 import 'account_panel.dart';
 import 'placement_screen.dart';
@@ -23,12 +26,17 @@ class SettingsScreen extends StatefulWidget {
   });
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  State<SettingsScreen> createState() => SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen>
+class SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
   String _section = 'menu';
+
+  /// The plan as it was when the Study plan page opened. Leaving the page with a
+  /// different plan asks whether to reset "days done" and start again from Day 1
+  /// (old day numbers no longer match). Null while the page is not open.
+  String? _planSigOnOpen;
   // Whether the device currently allows notifications (re-checked when the app comes back).
   bool _notifAllowed = true;
 
@@ -59,6 +67,55 @@ class _SettingsScreenState extends State<SettingsScreen>
   void _setMessage(String text) {
     if (!mounted) return;
     setState(() => _message = text);
+  }
+
+  /// Levels, days and the topics switch: the parts of the plan that change which
+  /// words fall on which day.
+  String _planSig(AppState s) =>
+      '${(List.of(s.levels)..sort()).join(',')}|${s.planDays}|${s.includeTopics}';
+
+  void _openSection(String id) {
+    setState(() {
+      _section = id;
+      _planSigOnOpen = id == 'plan' ? _planSig(widget.state) : null;
+    });
+  }
+
+  /// Web Settings.confirmPlanChange: leaving the Study plan page with a changed
+  /// plan offers to reset "days done" and start again from Day 1. Called by
+  /// HomeShell before it navigates away, as well as by Back and Close here.
+  Future<void> confirmPlanChange() async {
+    final s = widget.state;
+    final before = _planSigOnOpen;
+    if (_section != 'plan' || before == null || before == _planSig(s)) return;
+    _planSigOnOpen = _planSig(s);
+    if (s.completedDays.isEmpty && s.currentDay <= 1) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: const Text(
+          'You changed your study plan. Reset "days done" and start again from Day 1?\n\n'
+          'Words you have learned and quiz history are kept.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep my days'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await s.resetPlanProgress();
+  }
+
+  /// Runs [fn] after the plan-change question has been answered.
+  Future<void> _leave(VoidCallback fn) async {
+    await confirmPlanChange();
+    if (mounted) fn();
   }
 
   @override
@@ -94,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     children: [
       if (_section != 'menu')
         IconButton(
-          onPressed: () => setState(() => _section = 'menu'),
+          onPressed: () => _leave(() => _openSection('menu')),
           icon: Icon(Icons.chevron_left, color: widget.p.accent),
           tooltip: 'Back to settings',
         ),
@@ -109,7 +166,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
       ),
       OutlinedButton(
-        onPressed: widget.onClose,
+        onPressed: () => _leave(widget.onClose),
         style: OutlinedButton.styleFrom(
           foregroundColor: widget.p.accent,
           side: BorderSide(color: widget.p.accent),
@@ -171,7 +228,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               borderRadius: BorderRadius.circular(14),
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => setState(() => _section = id),
+                onTap: () => _openSection(id),
                 child: Ink(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -515,6 +572,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                 selected: s.primaryLang,
                 onPick: (code) => s.setPrimaryLang(code),
               ),
+              if (langByCode(s.primaryLang) != null) ...[
+                const SizedBox(height: 10),
+                _MeaningVoicePicker(
+                  key: ValueKey('voice-main-${s.primaryLang}'),
+                  lang: langByCode(s.primaryLang)!,
+                  p: p,
+                ),
+              ],
               const SizedBox(height: 14),
               Text(
                 'Second language',
@@ -531,6 +596,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                 includeNone: true,
                 onPick: (code) => s.setSecondaryLang(code),
               ),
+              if (langByCode(s.secondaryLang) != null) ...[
+                const SizedBox(height: 10),
+                _MeaningVoicePicker(
+                  key: ValueKey('voice-${s.secondaryLang}'),
+                  lang: langByCode(s.secondaryLang)!,
+                  p: p,
+                ),
+              ],
             ],
           ),
         ),
@@ -899,30 +972,151 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _import() async {
+    final signedIn = widget.state.isSignedIn;
+    final go = await confirmAction(
+      context,
+      message:
+          'Importing a backup replaces your current progress'
+          '${signedIn ? ', including the progress saved in your account' : ''}. '
+          'Export a backup first if you may want it back.',
+      confirmLabel: 'Choose file',
+    );
+    if (!go || !mounted) return;
     final message = await BackupService.importBackup(widget.state);
     if (message != null) _setMessage(message);
   }
 
-  // Web: window.confirm with OK / Cancel.
   Future<void> _confirmReset() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        content: const Text('Reset all progress? Your settings are kept.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+    final signedIn = widget.state.isSignedIn;
+    final ok = await confirmAction(
+      context,
+      message:
+          'Reset all progress? Your settings are kept.'
+          '${signedIn ? ' This also clears the progress saved in your account.' : ''}',
+      confirmLabel: 'Reset',
     );
-    if (ok != true) return;
+    if (!ok || !mounted) return;
     await widget.state.resetProgress();
     _setMessage('Progress reset.');
+  }
+}
+
+/// Pick which phone voice reads a meaning language (main or second). Android does not
+/// say which voices are male, so the learner listens and chooses.
+class _MeaningVoicePicker extends StatefulWidget {
+  final MeaningLang lang;
+  final OxPalette p;
+  const _MeaningVoicePicker({super.key, required this.lang, required this.p});
+
+  @override
+  State<_MeaningVoicePicker> createState() => _MeaningVoicePickerState();
+}
+
+class _MeaningVoicePickerState extends State<_MeaningVoicePicker> {
+  static const _auto = '';
+  List<Map<String, String>>? _voices;
+  String _chosen = _auto;
+
+  String get _tag => VoiceAnswer.tagFor(widget.lang.code);
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final voices = await Speech.voicesFor(_tag);
+    final chosen = await Speech.chosenVoice(_tag);
+    if (!mounted) return;
+    setState(() {
+      _voices = voices;
+      _chosen = voices.any((v) => v['name'] == chosen) ? chosen! : _auto;
+    });
+  }
+
+  Future<void> _pick(String name) async {
+    setState(() => _chosen = name);
+    await Speech.setChosenVoice(_tag, name == _auto ? null : name);
+    await _preview();
+  }
+
+  /// Says the language's own name in the chosen voice (Automatic uses the
+  /// phone's default voice for the language).
+  Future<void> _preview() async {
+    final voice = _voices?.where((v) => v['name'] == _chosen).firstOrNull;
+    if (voice != null) {
+      await Speech.speakWithVoice(widget.lang.native, voice);
+    } else {
+      await Speech.speakLang(widget.lang.native, _tag);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.p;
+    final voices = _voices;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${widget.lang.name} voice',
+          style: TextStyle(fontWeight: FontWeight.w500, color: p.ink),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          voices == null || voices.isNotEmpty
+              ? 'Pick a voice to hear it. Tap the speaker to hear it again.'
+              : 'No ${widget.lang.name} voice on this phone yet. Tap the speaker on a word to download one.',
+          style: TextStyle(color: p.muted, fontSize: OxType.small),
+        ),
+        if (voices != null && voices.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('voice-${widget.lang.code}-$_chosen'),
+                  initialValue: _chosen,
+                  isExpanded: true,
+                  dropdownColor: p.surface,
+                  style: TextStyle(color: p.ink, fontSize: OxType.body),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: _auto,
+                      child: Text('Automatic'),
+                    ),
+                    for (var i = 0; i < voices.length; i++)
+                      DropdownMenuItem(
+                        value: voices[i]['name'],
+                        child: Text('Voice ${i + 1}'),
+                      ),
+                  ],
+                  onChanged: (name) {
+                    if (name != null) _pick(name);
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                tooltip: 'Hear this voice',
+                onPressed: _preview,
+                icon: Icon(Icons.volume_up_rounded, color: p.accent),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
   }
 }

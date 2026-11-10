@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds shrink unused resources. The reminder sound is only referenced by name
+     from Dart (RawResourceAndroidNotificationSound('chime')), so the shrinker would
+     remove it. Keep it, and the launcher icon the notifications use. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/chime,@mipmap/ic_launcher" />

@@ -245,7 +245,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return Wrap(
       spacing: 6,
       runSpacing: 6,
-      children: [for (final (id, name, count) in items) _levelChip(id, name, count)],
+      children: [
+        for (final (id, name, count) in items) _levelChip(id, name, count),
+      ],
     );
   }
 
@@ -286,10 +288,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ],
                   ],
                 ),
-                Text(
-                  name,
-                  style: TextStyle(color: p.ink, fontSize: 12.8),
-                ),
+                Text(name, style: TextStyle(color: p.ink, fontSize: 12.8)),
                 Text(
                   '${_fmt(count)} words',
                   style: TextStyle(color: p.muted, fontSize: 12.8),

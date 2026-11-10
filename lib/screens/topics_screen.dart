@@ -8,6 +8,7 @@ import '../widgets/word_card.dart';
 import 'context_quiz_screen.dart';
 import 'flashcards_screen.dart';
 import 'quiz_screen.dart';
+import 'journey_screen.dart';
 
 /// Web: components/TopicsPanel.js. Topic grid, then a topic's words (tap a word for its sheet).
 class TopicsScreen extends StatefulWidget {
@@ -37,37 +38,12 @@ class _TopicsScreenState extends State<TopicsScreen> {
     );
   }
 
-  Widget _grid() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Topics',
-          style: TextStyle(
-            fontSize: OxType.heading,
-            fontWeight: FontWeight.w500,
-            color: p.ink,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Sound like a native speaker. Pick a topic, study the cards, then take a quiz on the same words.',
-          style: TextStyle(fontSize: OxType.small, color: p.muted),
-        ),
-        const SizedBox(height: 12),
-        for (final t in s.topics)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _TopicCard(
-              p: p,
-              topic: t,
-              done: t.words.where((w) => s.progress[w.id] != null).length,
-              onTap: () => setState(() => _activeId = t.id),
-            ),
-          ),
-      ],
-    );
-  }
+  /// The journey map; word topics open their detail here.
+  Widget _grid() => JourneyView(
+    state: s,
+    p: p,
+    onOpenTopic: (id) => setState(() => _activeId = id),
+  );
 
   Widget _detail(TopicItem topic) {
     final count = topic.words.length < 20 ? topic.words.length : 20;
@@ -80,7 +56,7 @@ class _TopicsScreenState extends State<TopicsScreen> {
             onPressed: () => setState(() => _activeId = null),
             icon: Icon(Icons.arrow_back, size: 16, color: p.accent),
             label: Text(
-              'All topics',
+              'Journey',
               style: TextStyle(color: p.accent, fontWeight: FontWeight.w500),
             ),
           ),
@@ -135,6 +111,7 @@ class _TopicsScreenState extends State<TopicsScreen> {
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => ContextQuizScreen(
+                      state: s,
                       p: p,
                       title: '${topic.label} in context',
                       questions: topic.questions!,
@@ -186,7 +163,7 @@ class _TopicsScreenState extends State<TopicsScreen> {
                 w,
                 p,
                 lines: s.lineOf(w),
-                exampleBn: s.content?.exampleBn ?? const {},
+                exampleBn: s.exampleBn,
                 saved: s.bookmarks.containsKey(w.id),
                 onToggleSave: () => s.toggleBookmark(w.id),
               ),
@@ -206,115 +183,6 @@ class _TopicsScreenState extends State<TopicsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => _GrammarSheet(p: p, narration: narration),
-    );
-  }
-}
-
-/// Icon per topic id (data/topics.json). Unknown ids use the default.
-const _topicIcons = <String, IconData>{
-  'phrasal': Icons.alt_route,
-  'idioms': Icons.lightbulb_outline,
-  'discourse': Icons.forum_outlined,
-  'collocations': Icons.join_inner,
-  'linking': Icons.link,
-  'hedging': Icons.blur_on,
-  'modals': Icons.rule,
-};
-
-IconData _topicIcon(String id) => _topicIcons[id] ?? Icons.auto_awesome;
-
-class _TopicCard extends StatelessWidget {
-  final OxPalette p;
-  final TopicItem topic;
-  final int done;
-  final VoidCallback onTap;
-  const _TopicCard({
-    required this.p,
-    required this.topic,
-    required this.done,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final total = topic.words.length;
-    final pct = total == 0 ? 0.0 : done / total;
-    return Container(
-      decoration: BoxDecoration(
-        color: p.surface,
-        border: Border.all(color: p.line),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: p.shadow, offset: const Offset(0, 2), blurRadius: 8),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: p.accentSoft,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(_topicIcon(topic.id), color: p.accent, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        topic.label,
-                        style: TextStyle(
-                          fontSize: 16.4,
-                          fontWeight: FontWeight.w500,
-                          color: p.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '$total items · $done practised',
-                        style: TextStyle(
-                          fontSize: 12.8,
-                          fontWeight: FontWeight.w400,
-                          color: p.accent,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        topic.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13, color: p.muted),
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: pct,
-                          minHeight: 5,
-                          backgroundColor: p.surface2,
-                          valueColor: AlwaysStoppedAnimation(p.accent),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(Icons.chevron_right, color: p.muted),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

@@ -74,10 +74,14 @@ class WordMeanings {
   final bool primaryRtl;
   final String? secondary;
   final bool secondaryRtl;
+
+  /// Language code of the secondary line (for reading it aloud).
+  final String? secondaryLang;
   const WordMeanings({
     required this.primary,
     required this.primaryRtl,
     this.secondary,
     this.secondaryRtl = false,
+    this.secondaryLang,
   });
 }

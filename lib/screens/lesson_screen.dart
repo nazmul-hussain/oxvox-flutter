@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../widgets/listen_thumb.dart';
 import '../models/word.dart';
+import '../widgets/quiz_kit.dart';
 
 /// Web components/ListeningPractice.js LessonView.
 class LessonScreen extends StatefulWidget {
@@ -43,6 +44,31 @@ class _LessonScreenState extends State<LessonScreen> {
 
   OxPalette get p => widget.p;
 
+  late final QuizVoice _voice = QuizVoice(
+    s: widget.state,
+    options: () => mode == _Mode.quiz && qi < quiz.length
+        ? [for (final o in quiz[qi].options) o.label]
+        : const [],
+    lang: () => 'en',
+    canAnswer: () => mode == _Mode.quiz && qi < quiz.length && picked == null,
+    onPick: (label) {
+      final i = quiz[qi].options.indexWhere((o) => o.label == label);
+      if (i >= 0) _pick(i);
+    },
+  );
+
+  @override
+  void dispose() {
+    _voice.dispose();
+    super.dispose();
+  }
+
+  void _pick(int i) {
+    if (picked != null) return;
+    _voice.stop();
+    setState(() => picked = i);
+  }
+
   void _next() {
     answers.add(quiz[qi].options[picked!].correct);
     if (qi + 1 < quiz.length) {
@@ -50,7 +76,9 @@ class _LessonScreenState extends State<LessonScreen> {
         qi += 1;
         picked = null;
       });
+      _voice.listen();
     } else {
+      _voice.stop();
       widget.state.saveListening(widget.lessonId, List<bool>.from(answers));
       setState(() => mode = _Mode.done);
     }
@@ -63,6 +91,7 @@ class _LessonScreenState extends State<LessonScreen> {
       answers.clear();
       picked = null;
     });
+    _voice.listen();
   }
 
   @override
@@ -135,7 +164,10 @@ class _LessonScreenState extends State<LessonScreen> {
                       _FullButton(
                         p: p,
                         label: 'Answer questions',
-                        onTap: () => setState(() => mode = _Mode.quiz),
+                        onTap: () {
+                          setState(() => mode = _Mode.quiz);
+                          _voice.listen();
+                        },
                       ),
                     if (mode == _Mode.quiz && qi < quiz.length)
                       _QuizCard(
@@ -144,7 +176,8 @@ class _LessonScreenState extends State<LessonScreen> {
                         index: qi,
                         total: quiz.length,
                         picked: picked,
-                        onPick: (i) => setState(() => picked = i),
+                        voice: _voice,
+                        onPick: _pick,
                         onNext: _next,
                       ),
                     if (mode == _Mode.done)
@@ -257,9 +290,11 @@ class _QuizCard extends StatelessWidget {
   final int index;
   final int total;
   final int? picked;
+  final QuizVoice voice;
   final ValueChanged<int> onPick;
   final VoidCallback onNext;
   const _QuizCard({
+    required this.voice,
     required this.p,
     required this.q,
     required this.index,
@@ -276,9 +311,16 @@ class _QuizCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Question ${index + 1} of $total',
-            style: TextStyle(fontSize: 13.6, color: p.muted),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Question ${index + 1} of $total',
+                  style: TextStyle(fontSize: 13.6, color: p.muted),
+                ),
+              ),
+              VoiceToggleChip(voice: voice, p: p),
+            ],
           ),
           const SizedBox(height: 6),
           Text(
@@ -293,19 +335,25 @@ class _QuizCard extends StatelessWidget {
           for (var i = 0; i < q.options.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: _OptionTile(
+              child: QuizOptionTile(
                 p: p,
                 label: q.options[i].label,
                 state: picked == null
-                    ? _OptState.idle
+                    ? QuizOptState.idle
                     : q.options[i].correct
-                    ? _OptState.good
+                    ? QuizOptState.good
                     : i == picked
-                    ? _OptState.bad
-                    : _OptState.idle,
-                enabled: picked == null,
-                onTap: () => onPick(i),
+                    ? QuizOptState.bad
+                    : QuizOptState.idle,
+                onTap: picked == null ? () => onPick(i) : null,
               ),
+            ),
+          if (picked == null)
+            ListenableBuilder(
+              listenable: voice,
+              builder: (_, _) => voice.on
+                  ? VoicePanel(voice: voice, p: p)
+                  : const SizedBox.shrink(),
             ),
           if (picked != null) ...[
             const SizedBox(height: 4),
@@ -316,65 +364,6 @@ class _QuizCard extends StatelessWidget {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-enum _OptState { idle, good, bad }
-
-class _OptionTile extends StatelessWidget {
-  final OxPalette p;
-  final String label;
-  final _OptState state;
-  final bool enabled;
-  final VoidCallback onTap;
-  const _OptionTile({
-    required this.p,
-    required this.label,
-    required this.state,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = switch (state) {
-      _OptState.good => p.greenSoft,
-      _OptState.bad => p.redSoft,
-      _OptState.idle => p.surface2,
-    };
-    final border = switch (state) {
-      _OptState.good => p.green,
-      _OptState.bad => p.red,
-      _OptState.idle => p.line,
-    };
-    final fg = switch (state) {
-      _OptState.good => p.green,
-      _OptState.bad => p.red,
-      _OptState.idle => p.ink,
-    };
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(12),
-      child: Ink(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        decoration: BoxDecoration(
-          color: bg,
-          border: Border.all(color: border),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 15.2,
-            color: fg,
-            fontWeight: state == _OptState.good
-                ? FontWeight.w500
-                : FontWeight.w400,
-          ),
-        ),
       ),
     );
   }

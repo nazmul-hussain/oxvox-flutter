@@ -17,8 +17,11 @@ import '../core/reminder_plan.dart';
 class ReminderService {
   static const _baseId = 100;
   static const _maxReminders = 20;
-  // New id: Android fixes a channel's sound when it is created, so the custom sound needs a new channel.
-  static const _channelId = 'daily_study_sound';
+  // Android fixes a channel's sound when it is created. Version 1.0.1 created
+  // 'daily_study_sound' while its chime.mp3 had been stripped from the release build, so
+  // that channel can be silent on installed phones. Use a new id and delete the old one.
+  static const _channelId = 'daily_study_chime';
+  static const _oldChannelIds = ['daily_study_sound'];
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _ready = false;
   static bool _enabled = false;
@@ -43,19 +46,26 @@ class ReminderService {
     } catch (_) {
       // Falls back to the default (UTC) location.
     }
-    await _plugin
+    final android = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(
-          const AndroidNotificationChannel(
-            _channelId,
-            'Daily study reminders',
-            description: 'Reminds you to study your daily words',
-            importance: Importance.high,
-            sound: RawResourceAndroidNotificationSound('chime'),
-          ),
-        );
+        >();
+    for (final old in _oldChannelIds) {
+      try {
+        await android?.deleteNotificationChannel(channelId: old);
+      } catch (_) {
+        // Nothing to clean up.
+      }
+    }
+    await android?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _channelId,
+        'Daily study reminders',
+        description: 'Reminds you to study your daily words',
+        importance: Importance.high,
+        sound: RawResourceAndroidNotificationSound('chime'),
+      ),
+    );
     _watcher ??= _LifecycleWatcher()..attach();
     _ready = true;
   }

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -64,6 +66,30 @@ class OxPalette {
 extension OxPaletteX on OxPalette {
   /// Solid action colour (buttons, play circle). Night stays black and white: brand is near-white.
   Color get action => brand;
+}
+
+/// Text or icon colour that stays readable on [bg] (dark ink on light fills, white on dark).
+Color readableOn(Color bg) => bg.computeLuminance() > 0.45
+    ? const Color(0xFF1F212D)
+    : const Color(0xFFFFFFFF);
+
+/// Star colour for scores; darker on light themes so it stays visible on white.
+Color starColor(OxPalette p) => p.surface.computeLuminance() > 0.5
+    ? const Color(0xFFE09A00)
+    : const Color(0xFFFFC53D);
+
+double _contrast(Color a, Color b) {
+  final x = a.computeLuminance(), y = b.computeLuminance();
+  return (max(x, y) + 0.05) / (min(x, y) + 0.05);
+}
+
+/// [c] moved toward [p.ink] just enough to reach 4.5:1 on [p.surface], for coloured text.
+Color legible(Color c, OxPalette p) {
+  for (var w = 0.0; w <= 1.0; w += 0.05) {
+    final v = Color.lerp(c, p.ink, w)!;
+    if (_contrast(v, p.surface) >= 4.5) return v;
+  }
+  return p.ink;
 }
 
 /// color-mix(in srgb, a w%, b)
